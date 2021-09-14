@@ -12,7 +12,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import logging
+from torchmeta.utils.gradient_based import gradient_update_parameters
+from torchmeta.modules import (
+   MetaModule,
 
+   MetaLinear,
+)  # pip3 intall torchmeta
 logger = logging.getLogger("auto_scheduler")
 
 from tvm.auto_scheduler.dataset import Dataset, LearningTask
@@ -76,8 +81,7 @@ class SegmentDataLoader:
                 else:
                     flatten_features.extend(row)
                 ct += 1
-
-        max_seg_len = self.segment_sizes.max()
+        # max_seg_len = self.segment_sizes.max()
         self.features = torch.tensor(np.array(flatten_features, dtype=np.float32))
         if fea_norm_vec is not None:
             self.normalize(fea_norm_vec)
@@ -107,7 +111,6 @@ class SegmentDataLoader:
         return self
 
     def sample_batch(self, batch_size):
-        raise NotImplemented
         batch_indices = np.random.choice(self.number, batch_size)
         return self._fetch_indices(batch_indices)
 
@@ -137,7 +140,7 @@ class SegmentDataLoader:
         return self.number
 
 
-class SegmentSumMLPModule(torch.nn.Module):
+class SegmentSumMLPModule(MetaModule):
     def __init__(self, in_dim, hidden_dim, out_dim, use_norm=False, add_sigmoid=False):
         super().__init__()
 
@@ -163,7 +166,7 @@ class SegmentSumMLPModule(torch.nn.Module):
             torch.nn.Linear(hidden_dim, hidden_dim),
             torch.nn.ReLU(),
         )
-        self.decoder = torch.nn.Linear(hidden_dim, out_dim)
+        self.decoder = MetaLinear(hidden_dim, out_dim)
 
     def freeze_for_fine_tuning(self):
         for x in self.segment_encoder.parameters():
@@ -201,10 +204,10 @@ class SegmentSumMLPModule(torch.nn.Module):
 
         return output
 
-class LSTMModuel(torch.nn.Module):
+class LSTMModuel(MetaModule):
     def __init__(self, in_dim, hidden_dim, out_dim):
         super().__init__()
-
+        print('in_dim',in_dim)
         self.segment_encoder = torch.nn.Sequential(
             torch.nn.Linear(in_dim, hidden_dim),
             torch.nn.ReLU(),
@@ -223,7 +226,7 @@ class LSTMModuel(torch.nn.Module):
             torch.nn.Linear(hidden_dim, hidden_dim),
             torch.nn.ReLU(),
         )
-        self.decoder = torch.nn.Linear(hidden_dim, out_dim)
+        self.decoder = MetaLinear(hidden_dim, out_dim)
 
 
     def forward(self, segment_sizes, features, params=None):
@@ -251,7 +254,7 @@ class LSTMModuel(torch.nn.Module):
 
 
 
-class MHAModule(torch.nn.Module):
+class MHAModule(MetaModule):
     def __init__(self, in_dim, hidden_dim, num_heads, out_dim, add_sigmoid=False):
         super().__init__()
 
@@ -267,13 +270,12 @@ class MHAModule(torch.nn.Module):
         self.l0 = torch.nn.MultiheadAttention(hidden_dim, num_heads)
 
         self.decoder = torch.nn.Sequential(
-            torch.nn.Linear(hidden_dim, out_dim),
+            MetaLinear(hidden_dim, out_dim),
         )
 
-    def forward(self, segment_sizes, features):
+    def forward(self, segment_sizes, features,params=None):
         n_seg = segment_sizes.shape[0]
         device = features.device
-
         features = self.encoder(features)
 
         seqs = []
@@ -282,10 +284,9 @@ class MHAModule(torch.nn.Module):
             seqs.append(features[ct: ct + seg_size])
             ct += seg_size
         output = torch.nn.utils.rnn.pad_sequence(seqs)
-
+        
         output = self.l0(output, output, output)[0] + output
         output = self.decoder(output).sum(0).squeeze()
-
         if self.add_sigmoid:
             output = torch.sigmoid(output)
 
@@ -319,37 +320,52 @@ def moving_average(average, update):
 
 
 class MLPModelInternal:
-    def __init__(self, device=None, few_shot_learning="base_only", use_workload_embedding=True, use_target_embedding=False,
-                 loss_type='lambdaRankLoss'):
+    def __init__(self, device=None, few_shot_learning="base_only", use_workload_embedding=True, use_target_embedding=True,
+                 loss_type='lambdaRankLoss',model_type='mlp',args=None,wandb=None):
         if device is None:
             if torch.cuda.device_count():
                 device = 'cuda:0'
             else:
                 device = 'cpu'
         print(device)
+        if args!=None:
+            self.args = args
+        else:
+            self.args = None
+        if wandb !=None:
+            self.wandb = wandb
+        else:
+            self.wandb = None
         # Common parameters
-        self.net_params = {
+        if self.args.models =='mlp':
+            self.net_params = {
             "type": "SegmentSumMLP",
             "in_dim": 164 + (10 if use_workload_embedding else 0),  
             "hidden_dim": 256,
             "out_dim": 1,
         }
-
-        # self.net_params = {
-        #    "type": "MultiHeadAttention",
-        #    "in_dim": 164,
-        #    "num_heads": 8,
-        #    "hidden_dim": 1024,
-        #    "out_dim": 1,
-        # }
-
+        elif self.args.models =='transformer':
+            self.net_params = {
+            "type": "MultiHeadAttention",
+            "in_dim": 164+ (10 if use_workload_embedding else 0),  
+            "num_heads": 8,
+            "hidden_dim": 1024,
+            "out_dim": 1,
+            }
+        elif self.args.models.lower() =='lstm':
+            self.net_params = {
+            "type": "LSTM",
+            "in_dim": 164+ (10 if use_workload_embedding else 0),  
+            "hidden_dim": 1024,
+            "out_dim": 1,
+            }
+        
         self.target_id_dict = {}
-        self.loss_type = loss_type
-        self.n_epoch = 100
-        self.lr = 7e-4
+        loss_type = self.loss_type = self.args.loss
+        
         
 
-        if loss_type == 'rmse':
+        if loss_type == 'rmse' or loss_type == 'rmse':
             self.loss_func = torch.nn.MSELoss()
             self.net_params['add_sigmoid'] = True
         elif loss_type == 'rankNetLoss':
@@ -369,22 +385,26 @@ class MLPModelInternal:
         else:
             raise ValueError("Invalid loss type: " + loss_type)
 
+        self.n_epoch = 100
+        self.lr = self.args.lr
         self.grad_clip = 0.5
+        if self.args.maml:
+            few_shot_learning='MAML'
         self.few_shot_learning = few_shot_learning
         self.fea_norm_vec = None
         self.use_workload_embedding = use_workload_embedding
         self.use_target_embedding = use_target_embedding
 
         # Hyperparameters for self.fit_base
-        self.batch_size = 512
+        self.batch_size = 1024
         self.infer_batch_size = 4096
-        self.wd = 1e-6
+        self.wd = self.args.wd
         self.device = device
         self.print_per_epoches = 5
 
         # Hyperparameters for MAML
-        self.meta_outer_lr = 7e-4
-        self.meta_inner_lr = 1e-2
+        self.meta_outer_lr = self.args.meta_outer_lr
+        self.meta_inner_lr = self.args.meta_inner_lr
         self.meta_test_num_steps = 5
         self.few_shot_number = 32
         self.meta_batch_size_tasks = 8
@@ -395,7 +415,7 @@ class MLPModelInternal:
         self.fine_tune_batch_size = 512
         self.fine_tune_num_steps = 10
         self.fine_tune_wd = 0
-
+        
         # models
         self.base_model = None
         self.local_model = {}
@@ -404,7 +424,6 @@ class MLPModelInternal:
         if self.few_shot_learning == "local_only":
             self.base_model = None
         elif self.few_shot_learning == "MAML":
-            raise NotImplemented
             self.fine_tune_lr = self.meta_inner_lr
             self.fine_tune_num_steps = self.meta_test_num_steps * 2
             self.base_model = self._fit_a_MAML_model(train_set, valid_set, valid_train_set)
@@ -470,7 +489,9 @@ class MLPModelInternal:
             raise ValueError("Invalid few-shot learning method: " + self.few_shot_learning)
 
     def predict(self, dataset):
+        
         if self.few_shot_learning in ["base_only", "fine_tune_mix_task", "fine_tune_per_task", "MAML"]:
+                
             return self._predict_a_dataset(self.base_model, dataset)
         elif self.few_shot_learning in ["local_only_mix_task", "local_only_per_task"]:
             ret = {}
@@ -484,6 +505,7 @@ class MLPModelInternal:
             for task in dataset.tasks():
                 if task not in self.local_model and self.few_shot_learning == "plus_mix_task":
                     self.local_model[task] = list(self.local_model.values())[0]
+                
                 local_preds = self._predict_a_task(self.local_model[task], task, dataset.features[task])
                 ret[task] = base_preds[task] + local_preds
             return ret
@@ -517,6 +539,8 @@ class MLPModelInternal:
         early_stop = n_epoch // 6
 
         net = make_net(self.net_params).to(self.device)
+        if self.wandb!=None:
+            self.wandb.watch(net)
         optimizer = torch.optim.Adam(
             net.parameters(), lr=self.lr, weight_decay=self.wd
         )
@@ -557,7 +581,21 @@ class MLPModelInternal:
 
                 print("Epoch: %d\tBatch: %d\t%s\tTrain Speed: %.0f" % (
                     epoch, batch, loss_msg, len(train_loader) / train_time,))
-
+                if self.wandb!=None:
+                    if self.loss_type == "rmse":
+                        self.wandb.log({
+                        "Train RMSE": np.sqrt(train_loss),
+                        "Valid RMSE": np.sqrt(valid_loss),
+                        "Epoch": epoch,
+                        "batch": batch,
+                        "Speed": len(train_loader) / train_time})
+                    else:
+                        self.wandb.log({
+                        "Train Loss": train_loss,
+                        "Valid Loss": valid_loss,
+                        "Epoch": epoch,
+                        "batch": batch,
+                        "Speed": len(train_loader) / train_time})
             # Early stop
             if train_loss < best_train_loss:
                 best_train_loss = train_loss
@@ -565,8 +603,10 @@ class MLPModelInternal:
             elif epoch - best_epoch >= early_stop:
                 print("Early stop. Best epoch: %d" % best_epoch)
                 break
-
-            self.save("tmp_mlp.pkl")
+            if self.args!=None:
+                self.save(f"{self.args.save}.pkl")
+            else:
+                self.save('tmp_mlp.pkl')
 
         return net
 
@@ -618,7 +658,19 @@ class MLPModelInternal:
                 elif self.loss_type in ["rankNetLoss", "lambdaRankLoss", "listNetLoss"]:
                     loss_msg = "Train Loss: %.4f\tValid Loss: %.4f" % (train_loss, valid_loss)
                 print("Fine-tune step: %d\t%s\tTime: %.1f" % (step, loss_msg, time.time() - tic,))
-
+                if self.wandb!=None:
+                    if self.loss_type == "rmse":
+                        self.wandb.log({
+                        "Train RMSE": np.sqrt(train_loss),
+                        "Valid RMSE": np.sqrt(valid_loss),
+                        "Epoch": step,
+                        "Time": (step, loss_msg, time.time() - tic,)})
+                    else:
+                        self.wandb.log({
+                        "Train Loss": train_loss,
+                        "Valid Loss": valid_loss,
+                        "Epoch": step,
+                        "Time": (step, loss_msg, time.time() - tic,)})
         return model
 
     def _validate(self, model, valid_loader):
@@ -633,8 +685,22 @@ class MLPModelInternal:
 
     def _predict_a_dataset(self, model, dataset):
         ret = {}
+        from copy import deepcopy
+        
+        
+        
         for task, features in dataset.features.items():
-            ret[task] = self._predict_a_task(model, task, features)
+            if self.args.maml and self.args.eval:
+                base_model = deepcopy(model)
+                length = int(len(features)*0.8)
+                idx = np.arange(len(features))[:length]
+                idx2 = np.arange(len(features))[length:]
+                tmp_set = Dataset.create_one_task(task, features[idx2], np.zeros((len(features[idx2]),)))
+                self._fine_tune_a_model(model,tmp_set, None,verbose=0)
+                ret[task] = self._predict_a_task(base_model, task, features[idx])
+            else:
+                ret[task] = self._predict_a_task(model, task, features)
+            
         return ret
 
     def _predict_a_task(self, model, task, features):
@@ -653,14 +719,15 @@ class MLPModelInternal:
 
     def _fit_a_MAML_model(self, train_set, valid_set=None, valid_train_set=None):
         print("=" * 60 + "\nFit a MAML net. Train size: %d" % len(train_set))
+        
         batch_size_tasks = self.meta_batch_size_tasks
         batch_size_per_task = self.meta_batch_size_per_task
         few_shot_number = self.few_shot_number
 
-        print_per_batches = 20
+        print_per_batches = 100
         n_batches = 3000
         early_stop = 200
-
+        
         # Compute normalization vector over the whole dataset
         if self.fea_norm_vec is None:
             all_train_loader = SegmentDataLoader(
@@ -669,14 +736,24 @@ class MLPModelInternal:
             self.fea_norm_vec = all_train_loader.normalize()
             del all_train_loader
 
+        
+      
+        if valid_set:
+            for task in valid_set.tasks():
+                self.register_new_task(task)
+            valid_loader = SegmentDataLoader(valid_set, self.infer_batch_size, self.device, self.use_workload_embedding,
+                                             self.use_target_embedding, self.target_id_dict,fea_norm_vec=self.fea_norm_vec)
+
+     
         # Build dataloaders
         train_loaders = {}
-        for task in train_set.feature_data:
-            task_dataset = train_set.extract_subset(task)
+        for task in train_set.features:
+            task_dataset = train_set.extract_subset([task])
             train_loaders[task] = SegmentDataLoader(
                 task_dataset, None, self.device, self.use_workload_embedding,
                 fea_norm_vec=self.fea_norm_vec, shuffle=True,
             )
+            
 
         # Make network
         net = make_net(self.net_params).to(self.device)
@@ -696,6 +773,7 @@ class MLPModelInternal:
             outer_loss = torch.tensor(0.0, device=self.device)
             # outer loss
             for task in tasks:
+                net.zero_grad()
                 train_loader = train_loaders[task]
 
                 train_segment_sizes, train_features, train_labels = train_loader.sample_batch(
@@ -707,18 +785,19 @@ class MLPModelInternal:
 
                 # inner loss
                 params = OrderedDict(net.meta_named_parameters())
-                for _ in range(self.meta_test_num_steps):
-                    inner_loss = self.loss_func(
-                        net(train_segment_sizes, train_features, params=params), train_labels
-                    )
-                    params = gradient_update_parameters(
-                        net,
-                        inner_loss,
-                        params=params,
-                        step_size=self.meta_inner_lr,
-                        first_order=False,
-                    )
-                    avg_inner_loss = moving_average(avg_inner_loss, inner_loss.item())
+                inner_loss = self.loss_func(
+                    net(train_segment_sizes, train_features, params=params), train_labels
+                )
+                params = gradient_update_parameters(
+                    net,
+                    inner_loss,
+                    params=params,
+                    step_size=self.meta_inner_lr,
+                    first_order=False,
+                )
+
+                 
+                avg_inner_loss = moving_average(avg_inner_loss, inner_loss.item())
 
                 # acculate gradient for meta-update
                 outer_loss += self.loss_func(
@@ -735,7 +814,7 @@ class MLPModelInternal:
 
             if batch % print_per_batches == 0 or batch == n_batches - 1:
                 # validate
-                valid_loss = self._validate(net, valid_set, valid_train_set, verbose=0)
+                valid_loss = self._validate(net, valid_loader)
                 print(
                     "Task Batch: %d\tOuter RMSE: %.4f\tInner RMSE: %.4f\tValid RMSE: %.4f"
                     % (
@@ -745,7 +824,13 @@ class MLPModelInternal:
                         np.sqrt(valid_loss),
                     )
                 )
-
+                if self.wandb != None:
+                    self.wandb.log({
+                    "batch": batch,
+                    "Outer RMSE": np.sqrt(avg_outer_loss),
+                    "Inner RMSE":  np.sqrt(avg_inner_loss),
+                    "Valid RMSE":  np.sqrt(valid_loss)})
+                 
             # Early stop
             if avg_outer_loss < best_train_loss:
                 best_train_loss = avg_outer_loss

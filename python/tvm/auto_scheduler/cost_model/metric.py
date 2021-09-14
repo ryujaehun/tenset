@@ -50,6 +50,14 @@ def metric_top_k_recall(preds, labels, top_k):
 
 def metric_peak_score(preds, labels, top_k):
     """Compute average peak score"""
+    # prediction 의 index를 추출 
+    # GT에서 위 index추출 
+    # ex 0.4,0.6,0.7,0.5
+    # 가정 만약에 예측을 잘했으면 위 값이 단조 감소가 되야함
+    # iteration을 돌면서 증가함수인지 확인하여 단조 증가함수로 만듬 (예측이 잘되었다면 첫번째가 가장 큰값이고 감소하므로 처음부터 끝까지 첫번째 최댓값 이됨)
+    # ex 0.4  ,0.6 , 0.7 , 0.7 
+    #  실제 라벨의 최댓 값이랑 나눔 
+    # 평균을 구함 
     trials = np.argsort(preds)[::-1][:top_k]
     trial_scores = labels[trials]
     curve = max_curve(trial_scores) / np.max(labels)

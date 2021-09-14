@@ -137,17 +137,19 @@ if __name__ == "__main__":
         ("bert_base", [(1, 128)]),
         ("bert_tiny", [(1, 128)]),
     ]
-    target = "llvm -model=platinum-8272"
+    #target = "llvm -model=platinum-8272"
+    target = 'cuda -model=k80'
 
     #model = XGBModelInternal()
     model = MLPModelInternal()
     model.load(model_file)
-
-    if args.combine:
-        eval_cost_model_on_network_combined(model, network_keys, target, top_ks)
-
-
+    
     top_ks = [1, 5]
+    if args.combine:
+        eval_cost_model_on_network_combined(model, network_keys, target)
+
+
+    
     top_1_total = []
     top_5_total = []
     for network_key in network_keys:

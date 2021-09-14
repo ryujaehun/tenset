@@ -34,7 +34,12 @@ var/
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
+*.pkl
+.*
+scripts/wandb/
+wandb/
+scripts/*.pkl
+scripts/dataset*
 # Unit test / coverage reports
 htmlcov/
 .tox/

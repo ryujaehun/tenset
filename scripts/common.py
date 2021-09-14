@@ -38,9 +38,9 @@ def log_line(record, out_file):
 ##### Dataset Utilities
 ####################################
 
-NETWORK_INFO_FOLDER = 'dataset/network_info'
-TO_MEASURE_PROGRAM_FOLDER = 'dataset/to_measure_programs'
-MEASURE_RECORD_FOLDER = 'dataset/measure_records'
+NETWORK_INFO_FOLDER = '/root/scripts/dataset/network_info'
+TO_MEASURE_PROGRAM_FOLDER = '/root/scripts/dataset/to_measure_programs'
+MEASURE_RECORD_FOLDER = '/root/scripts/dataset/measure_records'
 
 def clean_name(x):
     x = str(x)
