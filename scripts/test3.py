@@ -30,7 +30,7 @@ class Worker(threading.Thread):
         idx += 1
  
         
-        text = f"docker run --ipc=host -it --gpus '\"device={idx%self.count}\"' --cpus 8 --rm  -v /home/jaehun/tenset:/root/tvm -v /home/jaehun/tenset:/root test:latest python3 /root/scripts/train_model.py \
+        text = f"docker run --ipc=host -it --gpus '\"device={idx%self.count}\"' --cpus 8 --rm  -v /home/jaehun/tenset_3090:/root/tvm -v /home/jaehun/tenset_3090:/root test:latest python3 /root/scripts/train_model.py \
         --mode {self.mode} --maml  --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/{self.model}_{self.loss}_{self.mode}.log"
         proc = subprocess.Popen(text, shell=True, executable='/bin/bash')
         _ = proc.communicate()
