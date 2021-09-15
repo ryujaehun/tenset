@@ -784,7 +784,8 @@ def moving_average(average, update):
 
 class TabNetModelInternal:
     def __init__(self, use_gpu=True, device=None, few_shot_learning="base_only", use_workload_embedding=True, use_target_embedding=False,
-                 loss_type='lambdaRankLoss'):
+                 loss_type='lambdaRankLoss',wandb=None):
+        self.wandb=wandb
         print('tabnet')
         if device is None:
             if torch.cuda.device_count() and use_gpu:
@@ -1002,7 +1003,21 @@ class TabNetModelInternal:
 
                 print("Epoch: %d\tBatch: %d\t%s\tTrain Speed: %.0f" % (
                     epoch, batch, loss_msg, len(train_loader) / train_time,))
-
+                if self.wandb!=None:
+                    if self.loss_type == "rmse":
+                        self.wandb.log({
+                        "Train RMSE": np.sqrt(train_loss),
+                        "Valid RMSE": np.sqrt(valid_loss),
+                        "Epoch": epoch,
+                        "batch": batch,
+                        "Speed": len(train_loader) / train_time})
+                    else:
+                        self.wandb.log({
+                        "Train Loss": train_loss,
+                        "Valid Loss": valid_loss,
+                        "Epoch": epoch,
+                        "batch": batch,
+                        "Speed": len(train_loader) / train_time})
             # Early stop
             if train_loss < best_train_loss:
                 best_train_loss = train_loss
@@ -1063,7 +1078,19 @@ class TabNetModelInternal:
                 elif self.loss_type in ["rankNetLoss", "lambdaRankLoss", "listNetLoss"]:
                     loss_msg = "Train Loss: %.4f\tValid Loss: %.4f" % (train_loss, valid_loss)
                 print("Fine-tune step: %d\t%s\tTime: %.1f" % (step, loss_msg, time.time() - tic,))
-
+                if self.wandb!=None:
+                    if self.loss_type == "rmse":
+                        self.wandb.log({
+                        "Train RMSE": np.sqrt(train_loss),
+                        "Valid RMSE": np.sqrt(valid_loss),
+                        "Epoch": step,
+                        "Time": (step, loss_msg, time.time() - tic,)})
+                    else:
+                        self.wandb.log({
+                        "Train Loss": train_loss,
+                        "Valid Loss": valid_loss,
+                        "Epoch": step,
+                        "Time": (step, loss_msg, time.time() - tic,)})
         return model
 
     def _validate(self, model, valid_loader):
