@@ -127,7 +127,7 @@ def preset_batch_size_1():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--logs", nargs="+", type=str)
-    parser.add_argument("--target", nargs="+", type=str, default=["llvm -model=platinum-8272"])
+    parser.add_argument("--target", nargs="+", type=str, default=["llvm -model=e5-2673"])
     parser.add_argument("--sample-in-files", type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out-file", type=str, default='dataset.pkl')

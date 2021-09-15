@@ -21,7 +21,9 @@ from tvm.auto_scheduler.measure_record import RecordReader
 from .xgb_model import get_workload_embedding
 from .cost_model import PythonBasedModel
 
-class SegmentDataLoader:
+from torch.utils.data import DataLoader
+# class SegmentDataLoader(DataLoader):
+class SegmentDataLoader():
     def __init__(
             self,
             dataset,
@@ -32,10 +34,15 @@ class SegmentDataLoader:
             target_id_dict={},
             fea_norm_vec=None,
             shuffle=False,
+            num_workers=12,
+            pin_memory =True,
+            prefetch_factor=4,
     ):
+        # super(SegmentDataLoader,self).__init__(dataset = dataset,batch_size=batch_size,num_workers=num_workers,pin_memory=pin_memory,prefetch_factor=prefetch_factor)
         self.device = device
         self.shuffle = shuffle
         self.number = len(dataset)
+        # 
         self.batch_size = batch_size
 
         self.segment_sizes = torch.empty((self.number,), dtype=torch.int32)
@@ -133,7 +140,7 @@ class SegmentDataLoader:
         return self.number
 
 
-class SegmentSumMLPModule:
+class SegmentSumMLPModule(torch.nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, use_norm=False, add_sigmoid=False):
         super().__init__()
 
@@ -197,7 +204,7 @@ class SegmentSumMLPModule:
 
         return output
 
-class LSTMModuel:
+class LSTMModuel(torch.nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim):
         super().__init__()
         self.segment_encoder = torch.nn.Sequential(
@@ -245,8 +252,7 @@ class LSTMModuel:
         return output
 
 
-
-class MHAModule(torch.nn.Module):
+class OneShotModule(torch.nn.Module):
     def __init__(self, in_dim, hidden_dim, num_heads, out_dim, add_sigmoid=False):
         super().__init__()
 
@@ -269,6 +275,39 @@ class MHAModule(torch.nn.Module):
         n_seg = segment_sizes.shape[0]
         device = features.device
         features = self.encoder(features)
+        seqs = []
+        ct = 0
+        for seg_size in segment_sizes:
+            seqs.append(features[ct: ct + seg_size])
+            ct += seg_size
+        output = torch.nn.utils.rnn.pad_sequence(seqs)
+        output = self.transformer_encoder(output)
+        output = self.decoder(output).sum(0).squeeze()
+        if self.add_sigmoid:
+            output = torch.sigmoid(output)
+        return output
+
+class MHAModule(torch.nn.Module):
+    def __init__(self, in_dim, hidden_dim, num_heads, out_dim, add_sigmoid=False):
+        super().__init__()
+
+        self.add_sigmoid = add_sigmoid
+
+        self.encoder = torch.nn.Sequential(
+            torch.nn.Linear(in_dim, hidden_dim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            torch.nn.ReLU(),
+        )
+        self.l0 = torch.nn.MultiheadAttention(hidden_dim, num_heads)
+        self.decoder = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim, out_dim),
+        )
+
+    def forward(self, segment_sizes, features,params=None):
+        n_seg = segment_sizes.shape[0]
+        device = features.device
+        features = self.encoder(features)
         # ([4258, 1024])
         seqs = []
         ct = 0
@@ -276,8 +315,7 @@ class MHAModule(torch.nn.Module):
             seqs.append(features[ct: ct + seg_size])
             ct += seg_size
         output = torch.nn.utils.rnn.pad_sequence(seqs)
-        # output torch.Size([8, 1024, 1024])
-        output = self.transformer_encoder(output)
+        output = self.l0(output, output, output)[0] + output
         output = self.decoder(output).sum(0).squeeze()
         if self.add_sigmoid:
             output = torch.sigmoid(output)
@@ -293,6 +331,11 @@ def make_net(params):
         )
     elif params["type"] == "MultiHeadAttention":
         return MHAModule(
+            params['in_dim'], params['hidden_dim'], params['num_heads'], params['out_dim'],
+            add_sigmoid=params['add_sigmoid']
+        )
+    elif params["type"] == "OneShot":
+        return OneShotModule(
             params['in_dim'], params['hidden_dim'], params['num_heads'], params['out_dim'],
             add_sigmoid=params['add_sigmoid']
         )
@@ -330,13 +373,19 @@ class MLPModelInternal:
             self.wandb = None
         # Common parameters
         if self.args.models =='mlp':
+            self.batch_size = 4096*2
+            self.infer_batch_size = 4096
             self.net_params = {
             "type": "SegmentSumMLP",
             "in_dim": 164 + (10 if use_workload_embedding else 0),  
             "hidden_dim": 256,
             "out_dim": 1,
         }
+
         elif self.args.models =='transformer':
+            print(3)
+            self.batch_size = 4096
+            self.infer_batch_size = 4096
             self.net_params = {
             "type": "MultiHeadAttention",
             "in_dim": 164+ (10 if use_workload_embedding else 0),  
@@ -344,14 +393,27 @@ class MLPModelInternal:
             "hidden_dim": 1024,
             "out_dim": 1,
             }
+        elif self.args.models =='oneshot':
+            self.batch_size = 4096
+            self.infer_batch_size = 4096
+            self.net_params = {
+            "type": "OneShot",
+            "in_dim": 164+ (10 if use_workload_embedding else 0),  
+            "num_heads": 8,
+            "hidden_dim": 1024,
+            "out_dim": 1,
+            }
         elif self.args.models.lower() =='lstm':
+            self.batch_size = 4096
+            self.infer_batch_size = 4096
             self.net_params = {
             "type": "LSTM",
             "in_dim": 164+ (10 if use_workload_embedding else 0),  
             "hidden_dim": 1024,
             "out_dim": 1,
             }
-        
+        else:
+            raise('Invaid Model')
         self.target_id_dict = {}
         loss_type = self.loss_type = self.args.loss
         
@@ -388,8 +450,7 @@ class MLPModelInternal:
         self.use_target_embedding = use_target_embedding
 
         # Hyperparameters for self.fit_base
-        self.batch_size = 1024
-        self.infer_batch_size = 4096
+        
         self.wd = self.args.wd
         self.device = device
         self.print_per_epoches = 5
@@ -403,7 +464,7 @@ class MLPModelInternal:
         self.meta_batch_size_per_task = 256
 
         # Hyperparameters for fine-tuning
-        self.fine_tune_lr = 4e-2
+        self.fine_tune_lr = 1e-6
         self.fine_tune_batch_size = 512
         self.fine_tune_num_steps = 10
         self.fine_tune_wd = 0
@@ -418,7 +479,10 @@ class MLPModelInternal:
         elif self.few_shot_learning == "MAML":
             self.fine_tune_lr = self.meta_inner_lr
             self.fine_tune_num_steps = self.meta_test_num_steps * 2
-            self.base_model = self._metatune_a_model(train_set, valid_set, valid_train_set)
+            if self.args.mode == 0:
+                self.base_model = self._fit_a_MAML_model(train_set, valid_set, valid_train_set)
+            else:
+                self.base_model = self._metatune_a_model(train_set, valid_set, valid_train_set)
         else:
             self.base_model = self._fit_a_model(train_set, valid_set, valid_train_set)
 
@@ -513,7 +577,7 @@ class MLPModelInternal:
         
         train_loader = SegmentDataLoader(
             train_set, self.batch_size, self.device, self.use_workload_embedding, self.use_target_embedding,
-            self.target_id_dict, shuffle=True
+            self.target_id_dict, shuffle=True,num_workers=12,prefetch_factor=4,pin_memory=True
         )
 
         # Normalize features
@@ -612,15 +676,17 @@ class MLPModelInternal:
             self.target_id_dict[target] = len(self.target_id_dict)
     def _metatune_a_model(self, train_set, valid_set, valid_train_set=None):
         net = make_net(self.net_params).to(self.device)
-        if self.args.mode == 0 :
+        if self.args.mode == 1 :
             for i in range(20):
                 self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set)
+                self._fit_METATUNE(net,train_set,valid_set,valid_train_set)
+        elif self.args.mode == 2 :
+            for i in range(20):
+                self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set)
+            for i in range(20):
                 self._fit_METATUNE(net,train_set,valid_set,valid_train_set)
         else:
-            for i in range(20):
-                self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set)
-            for i in range(20):
-                self._fit_METATUNE(net,train_set,valid_set,valid_train_set)
+            raise('Invalid mode')
         # mode 1. 반복해서 전체 학습 / 마지막 layer 학습
 
         # mode 2. N iteration 학습 and 마지막 layer 학습

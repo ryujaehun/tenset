@@ -84,7 +84,7 @@ def make_model(name, use_gpu=False,args=None,wandb=None):
     """Make model according to a name"""
     if name == "xgb":
         return XGBModelInternal(use_gpu=use_gpu)
-    elif name == "mlp" or name == "transformer" or name.lower()=='lstm':
+    elif name == "mlp" or name == "transformer" or name.lower()=='lstm' or name.lower()=='oneshot':
         return MLPModelInternal(args=args,wandb=wandb)#,model_type='transformer')
     elif name == 'lgbm':
         return LGBModelInternal(use_gpu=use_gpu)
@@ -225,14 +225,15 @@ if __name__ == "__main__":
     parser.add_argument("--loss",  type=str, default='rmse')
     parser.add_argument("--maml", default=False, action="store_true")
     parser.add_argument("--eval", default=False, action="store_true")
-    parser.add_argument("--wd", type=float, default=7e-4)
-    parser.add_argument("--lr", type=float, default=1e-2)
-    parser.add_argument("--meta_outer_lr", type=float, default=7e-4)
-    parser.add_argument("--meta_inner_lr", type=float, default=7e-4)
+    parser.add_argument("--wd", type=float, default=5e-5)
+    parser.add_argument("--lr", type=float, default=5e-5)
+    parser.add_argument("--meta_outer_lr", type=float, default=5e-5)
+    parser.add_argument("--meta_inner_lr", type=float, default=5e-5)
     parser.add_argument("--dataset", nargs="+", type=str, default=["/root/scripts/dataset-k80.pkl"])
     parser.add_argument("--models", type=str, default="mlp")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--mode", type=int, default=0)
+    parser.add_argument("--wandb", default=False, action="store_true")
     parser.add_argument(
         "--split-scheme",
         type=str,
@@ -245,16 +246,19 @@ if __name__ == "__main__":
                         help="Whether to use GPU for xgb.")
     args = parser.parse_args()
     print("Arguments: %s" % str(args))
-    if args.maml:
-        wandb.init(name=f'{args.lr}_{args.wd}_{args.meta_inner_lr}_{args.meta_outer_lr}',project=f"MetaTune_{args.loss}_{args.mode}", tags=[f"{args.meta_inner_lr}",f"{args.meta_outer_lr}"])
-    elif args.models in ['xgb','lgbm','tab','random']:
-        wandb.init(name=f'{args.meta_inner_lr}_{args.meta_outer_lr}',project=f"Baseline_{args.models}_{args.loss}", tags=[f"{args.meta_inner_lr}",f"{args.meta_outer_lr}"])
+    if args.wandb:
+        if args.maml:
+            wandb.init(name=f'{args.models}_{args.loss}_{args.mode}',project=f"result", tags=[f"META",args.mode,args.models])
+        elif args.models in ['xgb','lgbm','random']:
+            wandb.init(name=f'{args.models}',project=f"result", tags=[f"BASELINE",args.models])
+        else:
+            wandb.init(name=f'{args.models}_{args.loss}',project=f"result", tags=[f"{args.models}",f"{args.loss}"])
+        wandb.config.update(args)
     else:
-        wandb.init(name=f'{args.models}_{args.loss}',project=f"{args.models}_{args.loss}", tags=[f"{args.models}",f"{args.loss}"])
-    wandb.config.update(args)
-    args.save = f'{args.models}_{args.loss}_{args.lr}_{args.wd}'
+        wandb = None
+    args.save = f'{args.models}_{args.loss}'
     if args.maml:
-        args.save += f'_maml_{args.meta_inner_lr}_{args.meta_outer_lr}'
+        args.save += f'_maml_{args.mode}'
     # Setup random seed and logging
     np.random.seed(args.seed)
     random.seed(args.seed)
@@ -296,12 +300,13 @@ if __name__ == "__main__":
         print(f"top 1 score: {best_latency/latencies[0]}")
         top_5_total.append(best_latency / latencies[1])
         print(f"top 5 score: {best_latency / latencies[1]}")
+        if args.wandb:
+            wandb.log({
+                        f"Eval {network_key} Top-1 score": (best_latency / latencies[0]),
+                        f"Eval {network_key} Top-5 score": (best_latency / latencies[1]),
+                        }, )
+    if args.wandb:
         wandb.log({
-                    f"Eval {network_key} Top-1 score": (best_latency / latencies[0]),
-                    f"Eval {network_key} Top-5 score": (best_latency / latencies[1]),
-                    }, )
-     
-    wandb.log({
                     f"final Top-1 score": sum(top_1_total) / len(top_1_total),
                     f"final Top-5 score": sum(top_5_total) / len(top_5_total),
                     }, )
