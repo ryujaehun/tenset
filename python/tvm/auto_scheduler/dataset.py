@@ -151,9 +151,11 @@ class Dataset:
         """
         target_to_task = defaultdict(list)
         for task in self.features.keys():
+            print(task)
             target_to_task[str(task.target)].append(task)
         targets = list(target_to_task.keys())
         targets = list(reversed(targets))
+        print(targets)
         #np.random.shuffle(targets)
 
         train_records = int(len(self) * train_set_ratio)

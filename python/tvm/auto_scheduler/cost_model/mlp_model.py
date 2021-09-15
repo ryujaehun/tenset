@@ -69,7 +69,8 @@ class SegmentDataLoader():
                     target_id = target_id_dict.get(
                         str(task.target), np.random.randint(0, len(target_id_dict))
                     )
-                    task_embedding[9+target_id] = 1.0
+                    if 9+target_id<len(task_embedding):
+                        task_embedding[9+target_id] = 1.0
 
 
             for row in dataset.features[task]:
@@ -373,7 +374,7 @@ class MLPModelInternal:
             self.wandb = None
         # Common parameters
         if self.args.models =='mlp':
-            self.batch_size = 4096*2
+            self.batch_size = 4096
             self.infer_batch_size = 4096
             self.net_params = {
             "type": "SegmentSumMLP",
@@ -384,8 +385,8 @@ class MLPModelInternal:
 
         elif self.args.models =='transformer':
             print(3)
-            self.batch_size = 4096
-            self.infer_batch_size = 4096
+            self.batch_size = 1024
+            self.infer_batch_size = 1024
             self.net_params = {
             "type": "MultiHeadAttention",
             "in_dim": 164+ (10 if use_workload_embedding else 0),  
@@ -394,8 +395,8 @@ class MLPModelInternal:
             "out_dim": 1,
             }
         elif self.args.models =='oneshot':
-            self.batch_size = 4096
-            self.infer_batch_size = 4096
+            self.batch_size = 1024
+            self.infer_batch_size = 1024
             self.net_params = {
             "type": "OneShot",
             "in_dim": 164+ (10 if use_workload_embedding else 0),  
@@ -404,8 +405,8 @@ class MLPModelInternal:
             "out_dim": 1,
             }
         elif self.args.models.lower() =='lstm':
-            self.batch_size = 4096
-            self.infer_batch_size = 4096
+            self.batch_size = 1024
+            self.infer_batch_size = 1024
             self.net_params = {
             "type": "LSTM",
             "in_dim": 164+ (10 if use_workload_embedding else 0),  

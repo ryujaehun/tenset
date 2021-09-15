@@ -14,7 +14,7 @@ from tqdm import tqdm
 import tvm
 from tvm import auto_scheduler
 
-from common import (load_and_register_tasks, get_task_info_filename,
+from common2 import (load_and_register_tasks, get_task_info_filename,
     get_measure_record_filename)
 
 from dump_network_info import build_network_keys
@@ -127,7 +127,7 @@ def preset_batch_size_1():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--logs", nargs="+", type=str)
-    parser.add_argument("--target", nargs="+", type=str, default=["llvm -model=e5-2673"])
+    parser.add_argument("--target", nargs="+", type=str, default=['llvm   -model=platinum-8272'])# -mtriple=aarch64-linux-gnu -mattr=+neon,+v8.2a,+dotprod -model=graviton2'])#["llvm -model=epyc-7452"])
     parser.add_argument("--sample-in-files", type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out-file", type=str, default='dataset.pkl')

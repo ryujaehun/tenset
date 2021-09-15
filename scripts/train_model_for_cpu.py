@@ -229,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--meta_outer_lr", type=float, default=5e-5)
     parser.add_argument("--meta_inner_lr", type=float, default=5e-5)
-    parser.add_argument("--dataset", nargs="+", type=str, default=['/root/scripts/dataset-k80.pkl'])
+    parser.add_argument("--dataset", nargs="+", type=str, default=['/root/scripts/dataset-e5.pkl','/root/scripts/dataset-plat.pkl'])
     parser.add_argument("--models", type=str, default="mlp")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--mode", type=int, default=0)
@@ -248,11 +248,11 @@ if __name__ == "__main__":
     print("Arguments: %s" % str(args))
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'{args.models}_{args.loss}_{args.mode}',project=f"result", tags=[f"META",f'{args.mode}',f'{args.models}'])
+            wandb.init(name=f'{args.models}_{args.loss}_{args.mode}',project=f"result_CROSS_CPU", tags=[f"META",f'{args.mode}',f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}',project=f"result", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}',project=f"result_CROSS_CPU", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}',project=f"result", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}',project=f"result_CROSS_CPU", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
@@ -285,7 +285,6 @@ if __name__ == "__main__":
         ("bert_tiny", [(1, 128)]),
     ]
     mm=args.dataset[0].split('-')[-1].split('.')[0]
-    # target = 'cuda -model=k80'
     target = 'llvm -model=epyc-7452'
     top_ks = [1, 5]
     top_1_total = []
