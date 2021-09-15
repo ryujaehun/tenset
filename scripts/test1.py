@@ -12,7 +12,7 @@ os.makedirs(f"log/{today}", exist_ok=True)
 maml = [False,True]
 
 loss = ['rmse','rankNetLoss','lambdaRankLoss','listNetLoss']
-model = ['mlp','transformer','lstm']
+model = ['mlp','transformer','lstm','tab']
 lr = [5e-5]
 wd = [5e-5]
 

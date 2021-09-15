@@ -21,7 +21,7 @@ class Worker(threading.Thread):
         super().__init__()
         self.loss = loss
         self.model = model
-        self.mode = 1
+        self.mode = 2
         self.count = torch.cuda.device_count()
   
     def run(self):

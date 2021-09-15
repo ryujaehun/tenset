@@ -833,15 +833,15 @@ class TabNetModelInternal:
         self.use_target_embedding = use_target_embedding
 
         # Hyperparameters for self.fit_base
-        self.batch_size = 512
-        self.infer_batch_size = 4096
+        self.batch_size = 256
+        self.infer_batch_size = 1024
         self.wd = 1e-6
         self.device = device
         self.print_per_epoches = 5
 
         # Hyperparameters for fine-tuning
         self.fine_tune_lr = 4e-2
-        self.fine_tune_batch_size = 512
+        self.fine_tune_batch_size = 256
         self.fine_tune_num_steps = 10
         self.fine_tune_wd = 0
 
