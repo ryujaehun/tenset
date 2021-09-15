@@ -12,21 +12,14 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import logging
-from torchmeta.utils.gradient_based import gradient_update_parameters
-from torchmeta.modules import (
-   MetaModule,
-
-   MetaLinear,
-)  # pip3 intall torchmeta
 logger = logging.getLogger("auto_scheduler")
-
+import higher
 from tvm.auto_scheduler.dataset import Dataset, LearningTask
 from tvm.auto_scheduler.feature import (
     get_per_store_features_from_measure_pairs, get_per_store_features_from_states)
 from tvm.auto_scheduler.measure_record import RecordReader
 from .xgb_model import get_workload_embedding
 from .cost_model import PythonBasedModel
-
 
 class SegmentDataLoader:
     def __init__(
@@ -140,7 +133,7 @@ class SegmentDataLoader:
         return self.number
 
 
-class SegmentSumMLPModule(MetaModule):
+class SegmentSumMLPModule:
     def __init__(self, in_dim, hidden_dim, out_dim, use_norm=False, add_sigmoid=False):
         super().__init__()
 
@@ -166,7 +159,7 @@ class SegmentSumMLPModule(MetaModule):
             torch.nn.Linear(hidden_dim, hidden_dim),
             torch.nn.ReLU(),
         )
-        self.decoder = MetaLinear(hidden_dim, out_dim)
+        self.decoder = torch.nn.Linear(hidden_dim, out_dim)
 
     def freeze_for_fine_tuning(self):
         for x in self.segment_encoder.parameters():
@@ -204,10 +197,9 @@ class SegmentSumMLPModule(MetaModule):
 
         return output
 
-class LSTMModuel(MetaModule):
+class LSTMModuel:
     def __init__(self, in_dim, hidden_dim, out_dim):
         super().__init__()
-        print('in_dim',in_dim)
         self.segment_encoder = torch.nn.Sequential(
             torch.nn.Linear(in_dim, hidden_dim),
             torch.nn.ReLU(),
@@ -226,7 +218,7 @@ class LSTMModuel(MetaModule):
             torch.nn.Linear(hidden_dim, hidden_dim),
             torch.nn.ReLU(),
         )
-        self.decoder = MetaLinear(hidden_dim, out_dim)
+        self.decoder = torch.nn.Linear(hidden_dim, out_dim)
 
 
     def forward(self, segment_sizes, features, params=None):
@@ -254,7 +246,7 @@ class LSTMModuel(MetaModule):
 
 
 
-class MHAModule(MetaModule):
+class MHAModule(torch.nn.Module):
     def __init__(self, in_dim, hidden_dim, num_heads, out_dim, add_sigmoid=False):
         super().__init__()
 
@@ -263,29 +255,29 @@ class MHAModule(MetaModule):
         self.encoder = torch.nn.Sequential(
             torch.nn.Linear(in_dim, hidden_dim),
             torch.nn.ReLU(),
-            torch.nn.Linear(hidden_dim, hidden_dim),
-            torch.nn.ReLU(),
         )
 
-        self.l0 = torch.nn.MultiheadAttention(hidden_dim, num_heads)
+        self.encoder_layer = torch.nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads,dropout=0.2)
+        self.transformer_encoder = torch.nn.TransformerEncoder(self.encoder_layer, 3)
+
 
         self.decoder = torch.nn.Sequential(
-            MetaLinear(hidden_dim, out_dim),
+            torch.nn.Linear(hidden_dim, out_dim),
         )
 
     def forward(self, segment_sizes, features,params=None):
         n_seg = segment_sizes.shape[0]
         device = features.device
         features = self.encoder(features)
-
+        # ([4258, 1024])
         seqs = []
         ct = 0
         for seg_size in segment_sizes:
             seqs.append(features[ct: ct + seg_size])
             ct += seg_size
         output = torch.nn.utils.rnn.pad_sequence(seqs)
-        
-        output = self.l0(output, output, output)[0] + output
+        # output torch.Size([8, 1024, 1024])
+        output = self.transformer_encoder(output)
         output = self.decoder(output).sum(0).squeeze()
         if self.add_sigmoid:
             output = torch.sigmoid(output)
@@ -426,7 +418,7 @@ class MLPModelInternal:
         elif self.few_shot_learning == "MAML":
             self.fine_tune_lr = self.meta_inner_lr
             self.fine_tune_num_steps = self.meta_test_num_steps * 2
-            self.base_model = self._fit_a_MAML_model(train_set, valid_set, valid_train_set)
+            self.base_model = self._metatune_a_model(train_set, valid_set, valid_train_set)
         else:
             self.base_model = self._fit_a_model(train_set, valid_set, valid_train_set)
 
@@ -518,6 +510,7 @@ class MLPModelInternal:
         for task in train_set.tasks():
             self.register_new_task(task)
 
+        
         train_loader = SegmentDataLoader(
             train_set, self.batch_size, self.device, self.use_workload_embedding, self.use_target_embedding,
             self.target_id_dict, shuffle=True
@@ -528,6 +521,8 @@ class MLPModelInternal:
             self.fea_norm_vec = train_loader.normalize()
         else:
             train_loader.normalize(self.fea_norm_vec)
+
+        
 
         if valid_set:
             for task in valid_set.tasks():
@@ -615,7 +610,237 @@ class MLPModelInternal:
 
         if target not in self.target_id_dict:
             self.target_id_dict[target] = len(self.target_id_dict)
+    def _metatune_a_model(self, train_set, valid_set, valid_train_set=None):
+        net = make_net(self.net_params).to(self.device)
+        if self.args.mode == 0 :
+            for i in range(20):
+                self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set)
+                self._fit_METATUNE(net,train_set,valid_set,valid_train_set)
+        else:
+            for i in range(20):
+                self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set)
+            for i in range(20):
+                self._fit_METATUNE(net,train_set,valid_set,valid_train_set)
+        # mode 1. 반복해서 전체 학습 / 마지막 layer 학습
 
+        # mode 2. N iteration 학습 and 마지막 layer 학습
+        # pass
+
+    def _fine_tune_for_metatune(self,  model,train_set, valid_set=None,valid_train_set=None, epoch=3):
+
+
+        for task in train_set.tasks():
+            self.register_new_task(task)
+
+
+        train_loader = SegmentDataLoader(
+            train_set, self.batch_size, self.device, self.use_workload_embedding, self.use_target_embedding,
+            self.target_id_dict, shuffle=True
+        )
+
+        # Normalize features
+        if self.fea_norm_vec is None:
+            self.fea_norm_vec = train_loader.normalize()
+        else:
+            train_loader.normalize(self.fea_norm_vec)
+
+
+
+        if valid_set:
+            for task in valid_set.tasks():
+                self.register_new_task(task)
+            valid_loader = SegmentDataLoader(valid_set, self.infer_batch_size, self.device, self.use_workload_embedding,
+                                                self.use_target_embedding, self.target_id_dict,fea_norm_vec=self.fea_norm_vec)
+
+        n_epoch = epoch
+
+        net = model.to(self.device)
+        if self.wandb!=None:
+            self.wandb.watch(net)
+        optimizer = torch.optim.Adam(
+            net.parameters(), lr=self.lr, weight_decay=self.wd
+        )
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=n_epoch // 3, gamma=1)
+
+        train_loss = None
+        best_epoch = None
+        best_train_loss = 1e10
+        for epoch in range(n_epoch):
+            tic = time.time()
+
+            # train
+            net.train()
+            for batch, (segment_sizes, features, labels) in enumerate(train_loader):
+                optimizer.zero_grad()
+                loss = self.loss_func(net(segment_sizes, features), labels)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(net.parameters(), self.grad_clip)
+                optimizer.step()
+
+                train_loss = moving_average(train_loss, loss.item())
+            lr_scheduler.step()
+
+            train_time = time.time() - tic
+
+            if epoch % self.print_per_epoches == 0 or epoch == n_epoch - 1:
+
+                if valid_set and valid_loader:
+                    valid_loss = self._validate(net, valid_loader)
+
+                else:
+                    valid_loss = 0.0
+
+                if self.loss_type == "rmse":
+                    loss_msg = "Train RMSE: %.4f\tValid RMSE: %.4f" % (np.sqrt(train_loss), np.sqrt(valid_loss))
+                elif self.loss_type in ["rankNetLoss", "lambdaRankLoss", "listNetLoss"]:
+                    loss_msg = "Train Loss: %.4f\tValid Loss: %.4f" % (train_loss, valid_loss)
+
+                print("Epoch: %d\tBatch: %d\t%s\tTrain Speed: %.0f" % (
+                    epoch, batch, loss_msg, len(train_loader) / train_time,))
+                if self.wandb!=None:
+                    if self.loss_type == "rmse":
+                        self.wandb.log({
+                        "Train RMSE": np.sqrt(train_loss),
+                        "Valid RMSE": np.sqrt(valid_loss),
+                        "Epoch": epoch,
+                        "batch": batch,
+                        "Speed": len(train_loader) / train_time})
+                    else:
+                        self.wandb.log({
+                        "Train Loss": train_loss,
+                        "Valid Loss": valid_loss,
+                        "Epoch": epoch,
+                        "batch": batch,
+                        "Speed": len(train_loader) / train_time})
+            # Early stop
+            if train_loss < best_train_loss:
+                best_train_loss = train_loss
+                best_epoch = epoch
+            
+    def _fit_METATUNE(self, model,train_set, valid_set=None, valid_train_set=None,epoch=10):
+        
+        batch_size_tasks = self.meta_batch_size_tasks
+        batch_size_per_task = self.meta_batch_size_per_task
+        few_shot_number = self.few_shot_number
+
+        print_per_batches = 100
+        n_batches = 3000
+        early_stop = 200
+        
+        # Compute normalization vector over the whole dataset
+        if self.fea_norm_vec is None:
+            all_train_loader = SegmentDataLoader(
+                train_set, self.batch_size, self.device, self.use_workload_embedding,
+            )
+            self.fea_norm_vec = all_train_loader.normalize()
+            del all_train_loader
+
+        
+      
+        if valid_set:
+            for task in valid_set.tasks():
+                self.register_new_task(task)
+            valid_loader = SegmentDataLoader(valid_set, self.infer_batch_size, self.device, self.use_workload_embedding,
+                                             self.use_target_embedding, self.target_id_dict,fea_norm_vec=self.fea_norm_vec)
+
+     
+        # Build dataloaders
+        train_loaders = {}
+        for task in train_set.features:
+            task_dataset = train_set.extract_subset([task])
+            train_loaders[task] = SegmentDataLoader(
+                task_dataset, None, self.device, self.use_workload_embedding,
+                fea_norm_vec=self.fea_norm_vec, shuffle=True,
+            )
+            
+
+        # Make network
+        net = make_net(self.net_params).to(self.device)
+        # optimizer = torch.optim.Adam(
+        #     net.parameters(), lr=self.meta_outer_lr, weight_decay=self.wd
+        # )   
+        inner_optimiser = torch.optim.SGD(net.decoder.parameters(), lr=self.meta_inner_lr)
+        meta_optimizer = torch.optim.Adam(net.decoder.parameters(), lr=self.meta_outer_lr)
+
+
+        # Training
+        avg_outer_loss = None
+        avg_inner_loss = None
+        task_list = list(train_set.tasks())
+        best_batch = None
+        best_train_loss = 1e10
+        net.train()
+
+        for batch in range(epoch):
+            tasks = random.choices(task_list, k=batch_size_tasks)
+            net.zero_grad()
+            outer_loss = torch.tensor(0.0, device=self.device)
+            # outer loss
+            for task in tasks:
+                with higher.innerloop_ctx(net, inner_optimiser, copy_initial_weights=False) as (fmodel, diffopt):
+
+                    train_loader = train_loaders[task]
+
+                    train_segment_sizes, train_features, train_labels = train_loader.sample_batch(
+                        few_shot_number
+                    )
+                    test_segment_sizes, test_features, test_labels = train_loader.sample_batch(
+                        batch_size_per_task
+                    )
+
+                    # inner loss
+                    # params = OrderedDict(net.meta_named_parameters())
+                    inner_loss = self.loss_func(
+                        net(train_segment_sizes, train_features), train_labels
+                    )
+                    diffopt.step(inner_loss)
+                 
+                    
+                 
+                    avg_inner_loss = moving_average(avg_inner_loss, inner_loss.item())
+
+                    # acculate gradient for meta-update
+                    outer_loss += self.loss_func(
+                        net(test_segment_sizes, test_features), test_labels
+                    )
+
+
+
+            outer_loss /= len(tasks)
+            outer_loss.backward()
+            meta_optimizer.step()
+            torch.nn.utils.clip_grad_norm_(net.parameters(), self.grad_clip)
+
+            avg_outer_loss = moving_average(avg_outer_loss, outer_loss.item())
+
+            if batch % print_per_batches == 0 or batch == n_batches - 1:
+                # validate
+                valid_loss = self._validate(net, valid_loader)
+                print(
+                    "Task Batch: %d\tOuter RMSE: %.4f\tInner RMSE: %.4f\tValid RMSE: %.4f"
+                    % (
+                        batch,
+                        np.sqrt(avg_outer_loss),
+                        np.sqrt(avg_inner_loss),
+                        np.sqrt(valid_loss),
+                    )
+                )
+                if self.wandb != None:
+                    self.wandb.log({
+                    "batch": batch,
+                    "Outer RMSE": np.sqrt(avg_outer_loss),
+                    "Inner RMSE":  np.sqrt(avg_inner_loss),
+                    "Valid RMSE":  np.sqrt(valid_loss)})
+                 
+            # Early stop
+            if avg_outer_loss < best_train_loss:
+                best_train_loss = avg_outer_loss
+                best_batch = batch
+            elif batch - best_batch >= early_stop:
+                print("Early stop. Best batch: %d" % best_batch)
+                break
+
+        return net
 
     def _fine_tune_a_model(self, model, train_set, valid_set=None, verbose=1):
         if verbose >= 1:

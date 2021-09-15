@@ -85,12 +85,11 @@ def make_model(name, use_gpu=False,args=None,wandb=None):
     if name == "xgb":
         return XGBModelInternal(use_gpu=use_gpu)
     elif name == "mlp" or name == "transformer" or name.lower()=='lstm':
-   
         return MLPModelInternal(args=args,wandb=wandb)#,model_type='transformer')
     elif name == 'lgbm':
         return LGBModelInternal(use_gpu=use_gpu)
     elif name == 'tab':
-        return TabNetModelInternal(use_gpu=use_gpu)
+        return TabNetModelInternal(loss_type=args.loss,wandb=wandb,use_gpu=use_gpu)
     elif name == "random":
         return RandomModelInternal()
     else:
@@ -119,7 +118,6 @@ def train_zero_shot(dataset, train_ratio, model_names, split_scheme, use_gpu,arg
     models = []
     for name in names:
         models.append(make_model(name, use_gpu,args,wandb))
-    print('models',models)
     eval_results = []
     for name, model in zip(names, models):
         # Train the model
@@ -234,6 +232,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", nargs="+", type=str, default=["/root/scripts/dataset-k80.pkl"])
     parser.add_argument("--models", type=str, default="mlp")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--mode", type=int, default=0)
     parser.add_argument(
         "--split-scheme",
         type=str,
@@ -247,9 +246,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print("Arguments: %s" % str(args))
     if args.maml:
-        wandb.init(name=f'{args.meta_inner_lr}_{args.meta_outer_lr}',project=f"MAML_{args.models}_{args.loss}", tags=[f"{args.meta_inner_lr}",f"{args.meta_outer_lr}"])
+        wandb.init(name=f'{args.lr}_{args.wd}_{args.meta_inner_lr}_{args.meta_outer_lr}',project=f"MetaTune_{args.loss}_{args.mode}", tags=[f"{args.meta_inner_lr}",f"{args.meta_outer_lr}"])
+    elif args.models in ['xgb','lgbm','tab','random']:
+        wandb.init(name=f'{args.meta_inner_lr}_{args.meta_outer_lr}',project=f"Baseline_{args.models}_{args.loss}", tags=[f"{args.meta_inner_lr}",f"{args.meta_outer_lr}"])
     else:
-        wandb.init(name=f'{args.lr}_{args.wd}',project=f"{args.models}_{args.loss}", tags=[f"{args.lr}",f"{args.wd}"])
+        wandb.init(name=f'{args.models}_{args.loss}',project=f"{args.models}_{args.loss}", tags=[f"{args.models}",f"{args.loss}"])
     wandb.config.update(args)
     args.save = f'{args.models}_{args.loss}_{args.lr}_{args.wd}'
     if args.maml:
