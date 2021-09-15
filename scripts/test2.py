@@ -8,7 +8,7 @@ today = datetime.today().strftime('%Y-%m-%d')
 sem = threading.Semaphore(torch.cuda.device_count())
 idx = 0
 os.makedirs(f"log/{today}", exist_ok=True)
-
+import time
 maml = [False,True]
 
 loss = ['rmse','rankNetLoss','lambdaRankLoss','listNetLoss']
@@ -39,6 +39,7 @@ class Worker(threading.Thread):
              --use-gpu --loss {self.loss} --models {self.model} --lr {self.lr} --wd {self.wd} >& log/{today}/{self.model}_{self.loss}_{self.lr}_{self.wd}.log"
         proc = subprocess.Popen(text, shell=True, executable='/bin/bash')
         _ = proc.communicate()
+        time.sleep(3)
         sem.release()
 
 

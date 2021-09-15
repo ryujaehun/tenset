@@ -248,9 +248,9 @@ if __name__ == "__main__":
     print("Arguments: %s" % str(args))
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'{args.models}_{args.loss}_{args.mode}',project=f"result", tags=[f"META",args.mode,args.models])
+            wandb.init(name=f'{args.models}_{args.loss}_{args.mode}',project=f"result", tags=[f"META",f'{args.mode}',f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}',project=f"result", tags=[f"BASELINE",args.models])
+            wandb.init(name=f'{args.models}',project=f"result", tags=[f"BASELINE",f'{args.models}'])
         else:
             wandb.init(name=f'{args.models}_{args.loss}',project=f"result", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
