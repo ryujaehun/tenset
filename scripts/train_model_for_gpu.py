@@ -238,7 +238,7 @@ if __name__ == "__main__":
         "--split-scheme",
         type=str,
         choices=["by_task", "within_task", "by_target"],
-        default="by_task",
+        default="by_target",
     )
     parser.add_argument("--train-ratio", type=float, default=0.9)
     parser.add_argument("--use-gpu", type=str2bool, nargs='?',
