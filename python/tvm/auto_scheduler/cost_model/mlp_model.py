@@ -42,7 +42,6 @@ class SegmentDataLoader():
         self.device = device
         self.shuffle = shuffle
         self.number = len(dataset)
-        # 
         self.batch_size = batch_size
 
         self.segment_sizes = torch.empty((self.number,), dtype=torch.int32)
@@ -438,7 +437,7 @@ class MLPModelInternal:
         else:
             raise ValueError("Invalid loss type: " + loss_type)
 
-        self.n_epoch = 100
+        self.n_epoch = 80
         self.lr = self.args.lr
         self.grad_clip = 0.5
         if self.args.maml:
@@ -675,17 +674,11 @@ class MLPModelInternal:
             self.target_id_dict[target] = len(self.target_id_dict)
     def _metatune_a_model(self, train_set, valid_set, valid_train_set=None):
         net = make_net(self.net_params).to(self.device)
-        if self.args.mode == 1 :
-            for i in range(20):
-                self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set)
-                self._fit_METATUNE(net,train_set,valid_set,valid_train_set)
-        elif self.args.mode == 2 :
-            for i in range(20):
-                self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set)
-            for i in range(20):
-                self._fit_METATUNE(net,train_set,valid_set,valid_train_set)
-        else:
-            raise('Invalid mode')
+        for _ in range(20):
+            self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set)
+        for _ in range(20):
+            self._fit_METATUNE(net,train_set,valid_set,valid_train_set)
+        
         return net
         # mode 1. 반복해서 전체 학습 / 마지막 layer 학습
 

@@ -11,8 +11,8 @@ os.makedirs(f"log/{today}", exist_ok=True)
 import time
 maml = [False,True]
 
-loss = ['rmse','rankNetLoss','lambdaRankLoss']
-model = ['mlp','transformer','lstm','tab']
+loss = ['rmse','lambdaRankLoss']
+model = ['mlp','oneshot','lstm']
 lr = [5e-5]
 wd = [5e-5]
 
@@ -36,9 +36,12 @@ class Worker(threading.Thread):
 
 
 threads = []
-# thread = Worker('rmse','xgb')
-# thread.start()              # sub thread의 run 메서드를 호출
-# threads.append(thread)
+thread = Worker('rmse','xgb')
+thread.start()              # sub thread의 run 메서드를 호출
+threads.append(thread)
+thread = Worker('rmse','random')
+thread.start()              # sub thread의 run 메서드를 호출
+threads.append(thread)
 for _loss in loss:
     for _model in model:
         thread = Worker(_loss,_model)

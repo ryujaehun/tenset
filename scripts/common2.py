@@ -41,7 +41,13 @@ def log_line(record, out_file):
 NETWORK_INFO_FOLDER = '/root/scripts/dataset_cpu/network_info'
 TO_MEASURE_PROGRAM_FOLDER = '/root/scripts/dataset_cpu/to_measure_programs'
 MEASURE_RECORD_FOLDER = '/root/scripts/dataset_cpu/measure_records'
-
+def nameset(_type):
+    global NETWORK_INFO_FOLDER
+    global TO_MEASURE_PROGRAM_FOLDER
+    global MEASURE_RECORD_FOLDER
+    NETWORK_INFO_FOLDER = f'/root/scripts/dataset_{_type}/network_info'
+    TO_MEASURE_PROGRAM_FOLDER = f'/root/scripts/dataset_{_type}/to_measure_programs'
+    MEASURE_RECORD_FOLDER = f'/root/scripts/dataset_{_type}/measure_records'
 def clean_name(x):
     x = str(x)
     x = x.replace(" ", "")
