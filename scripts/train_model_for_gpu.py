@@ -229,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--meta_outer_lr", type=float, default=5e-5)
     parser.add_argument("--meta_inner_lr", type=float, default=5e-5)
-    parser.add_argument("--dataset", nargs="+", type=str, default=['/root/scripts/dataset-t80.pkl'])
+    parser.add_argument("--dataset", nargs="+", type=str, default=['/root/scripts/dataset-k80.pkl'])
     parser.add_argument("--models", type=str, default="mlp")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--mode", type=int, default=0)
