@@ -363,7 +363,6 @@ class MLPModelInternal:
                 device = 'cuda:0'
             else:
                 device = 'cpu'
-        print(device)
         if args!=None:
             self.args = args
         else:
@@ -687,6 +686,7 @@ class MLPModelInternal:
                 self._fit_METATUNE(net,train_set,valid_set,valid_train_set)
         else:
             raise('Invalid mode')
+        return net
         # mode 1. 반복해서 전체 학습 / 마지막 layer 학습
 
         # mode 2. N iteration 학습 and 마지막 layer 학습
@@ -821,7 +821,7 @@ class MLPModelInternal:
             
 
         # Make network
-        net = make_net(self.net_params).to(self.device)
+        net = model.to(self.device)
         # optimizer = torch.optim.Adam(
         #     net.parameters(), lr=self.meta_outer_lr, weight_decay=self.wd
         # )   
