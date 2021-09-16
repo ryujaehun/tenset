@@ -52,7 +52,7 @@ def evaluate_model(model, test_set,ratio=1):
         
         preds = prediction[task]
         labels = test_set.throughputs[task]
-        length = int(len(preds)*0.9)
+        length = int(len(preds)*0.7)
         idx = np.arange(len(preds))[:length]
         preds = preds[idx]
         labels = labels[idx]
@@ -186,9 +186,9 @@ def eval_cost_model_on_network(model, network_key, target, top_ks,args):
             filenames, dataset_file, min_sample_size=0)
     dataset = pickle.load(open(dataset_file, "rb"))
     if args.maml:
-        eval_res = evaluate_model(model, dataset,0.8)
+        eval_res = evaluate_model(model, dataset,0.7)
     else:
-        eval_res = evaluate_model(model, dataset,1)
+        eval_res = evaluate_model(model, dataset,0.7)
     print(to_str_round(eval_res))
     print("===============================================")
 
@@ -208,10 +208,10 @@ if __name__ == "__main__":
     parser.add_argument("--loss",  type=str, default='rmse')
     parser.add_argument("--maml", default=False, action="store_true")
     parser.add_argument("--eval", default=False, action="store_true")
-    parser.add_argument("--wd", type=float, default=5e-5)
-    parser.add_argument("--lr", type=float, default=5e-5)
-    parser.add_argument("--meta_outer_lr", type=float, default=5e-5)
-    parser.add_argument("--meta_inner_lr", type=float, default=5e-5)
+    parser.add_argument("--wd", type=float, default=1e-4)
+    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--meta_outer_lr", type=float, default=1e-4)
+    parser.add_argument("--meta_inner_lr", type=float, default=1e-4)
     parser.add_argument("--dataset", type=str, default='k80',choices=['k80','t4','e5'])
     parser.add_argument("--models", type=str, default="mlp")
     parser.add_argument("--seed", type=int, default=0)
@@ -230,15 +230,15 @@ if __name__ == "__main__":
     print("Arguments: %s" % str(args))
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'{args.models}_{args.loss}',project=f"result_1", tags=[f"META",f'{args.models}'])
+            wandb.init(name=f'META_{args.models}_{args.loss}',project=f"NEW_EXP_1", tags=[f"META",f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}',project=f"result", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}',project=f"NEW_EXP_1", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}',project=f"result_1", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}',project=f"NEW_EXP_1", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
-    args.save = f'{args.models}_{args.loss}'
+    args.save = f'EXP_1_{args.models}_{args.loss}'
     if args.maml:
         args.save += f'_maml'
     # Setup random seed and logging
@@ -286,7 +286,7 @@ if __name__ == "__main__":
     args.eval = True
   
     for network_key in network_keys:
-        latencies, best_latency , eval_res = eval_cost_model_on_network(model, network_key, target, top_ks,args)
+        (latencies, best_latency) , eval_res = eval_cost_model_on_network(model, network_key, target, top_ks,args)
 
         for top_k, latency in zip(top_ks, latencies):
             print(f"Network: {network_key}\tTop-{top_k} score: {best_latency / latency}")

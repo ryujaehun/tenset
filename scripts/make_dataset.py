@@ -15,7 +15,7 @@ import tvm
 from tvm import auto_scheduler
 
 from common2 import (load_and_register_tasks, get_task_info_filename,
-    get_measure_record_filename)
+    get_measure_record_filename,nameset)
 
 from dump_network_info import build_network_keys
 
@@ -25,11 +25,21 @@ def get_hold_out_task(target, network=None):
 
     if network == "resnet-50":
         print("precluding all tasks in resnet-50")
-        for batch_size in [1, 4, 8]:
+        for batch_size in [1]:
             for image_size in [224, 240, 256]:
                 for layer in [50]:
                     network_keys.append((f'resnet_{layer}',
                                          [(batch_size, 3, image_size, image_size)]))
+    elif network == "resnet-18":
+        print("precluding all tasks in resnet-50")
+        for batch_size in [1]:
+            for image_size in [224, 240, 256]:
+                for layer in [50]:
+                    network_keys.append((f'resnet_{layer}',
+                                         [(batch_size, 3, image_size, image_size)]))
+    elif network == "mobilenet_v2":
+        print("precluding all tasks in resnet-50")
+        network_keys.append(('mobilenet_v2', [(1, 3, 224, 224)]))
     else:
         # resnet_18 and resnet_50
         for layer in [18, 50]:
@@ -127,12 +137,12 @@ def preset_batch_size_1():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--logs", nargs="+", type=str)
-    parser.add_argument("--target", nargs="+", type=str, default=['llvm   -model=platinum-8272'])# -mtriple=aarch64-linux-gnu -mattr=+neon,+v8.2a,+dotprod -model=graviton2'])#["llvm -model=epyc-7452"])
+    parser.add_argument("--target", type=str, default=['llvm -model=epyc-7452'])# -mtriple=aarch64-linux-gnu -mattr=+neon,+v8.2a,+dotprod -model=graviton2'])#["llvm -model=epyc-7452"])
     parser.add_argument("--sample-in-files", type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out-file", type=str, default='dataset.pkl')
     parser.add_argument("--min-sample-size", type=int, default=48)
-    parser.add_argument("--hold-out", type=str, choices=['resnet-50', 'all_five'])
+    parser.add_argument("--hold-out", type=str,choices=['mobilenet_v2','resnet-50', 'all_five'])
     parser.add_argument("--preset", type=str, choices=['batch-size-1'])
     parser.add_argument("--n-task", type=int)
     parser.add_argument("--n-measurement", type=int)
@@ -145,6 +155,13 @@ if __name__ == "__main__":
     if args.hold_out or args.n_task:
         task_cnt = 0
         for target in args.target:
+            if target.split(' ')[0]=='llvm':
+                nameset('cpu')
+                print(target)
+            else:
+                print(target)
+                nameset('gpu')
+
             target = tvm.target.Target(target)
             to_be_excluded = get_hold_out_task(target, args.hold_out)
             network_keys = build_network_keys()
@@ -174,6 +191,12 @@ if __name__ == "__main__":
         # Load tasks from networks
         network_keys = preset_batch_size_1()
         target = tvm.target.Target(args.target[0])
+        if args.target[0].split(' ')[0]=='llvm':
+            nameset('cpu')
+            print(target)
+        else:
+            print(target)
+            nameset('gpu')
         all_tasks = []
         exists = set()   # a set to remove redundant tasks
         print("Load tasks...")

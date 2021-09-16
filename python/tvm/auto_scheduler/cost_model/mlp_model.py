@@ -477,10 +477,10 @@ class MLPModelInternal:
         elif self.few_shot_learning == "MAML":
             self.fine_tune_lr = self.meta_inner_lr
             self.fine_tune_num_steps = self.meta_test_num_steps * 2
-            if self.args.mode == 0:
-                self.base_model = self._fit_a_MAML_model(train_set, valid_set, valid_train_set)
-            else:
-                self.base_model = self._metatune_a_model(train_set, valid_set, valid_train_set)
+            # if self.args.mode == 0:
+            #     self.base_model = self._fit_a_MAML_model(train_set, valid_set, valid_train_set)
+            # else:
+            self.base_model = self._metatune_a_model(train_set, valid_set, valid_train_set)
         else:
             self.base_model = self._fit_a_model(train_set, valid_set, valid_train_set)
 
@@ -674,10 +674,10 @@ class MLPModelInternal:
             self.target_id_dict[target] = len(self.target_id_dict)
     def _metatune_a_model(self, train_set, valid_set, valid_train_set=None):
         net = make_net(self.net_params).to(self.device)
-        for _ in range(20):
-            self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set)
-        for _ in range(20):
-            self._fit_METATUNE(net,train_set,valid_set,valid_train_set)
+        # for _ in range(20):
+        self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set,epoch=60)
+        # for _ in range(20):
+        self._fit_METATUNE(net,train_set,valid_set,valid_train_set,epoch=100)
         
         return net
         # mode 1. 반복해서 전체 학습 / 마지막 layer 학습
@@ -976,7 +976,7 @@ class MLPModelInternal:
         for task, features in dataset.features.items():
             if self.args.maml and self.args.eval:
                 base_model = deepcopy(model)
-                length = int(len(features)*0.8)
+                length = int(len(features)*0.7)
                 idx = np.arange(len(features))[:length]
                 idx2 = np.arange(len(features))[length:]
                 tmp_set = Dataset.create_one_task(task, features[idx2], np.zeros((len(features[idx2]),)))
