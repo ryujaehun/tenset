@@ -229,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--meta_outer_lr", type=float, default=5e-5)
     parser.add_argument("--meta_inner_lr", type=float, default=5e-5)
-    parser.add_argument("--dataset", nargs="+", type=str, default=['/root/scripts/dataset-t4.pkl'])
+    parser.add_argument("--dataset", nargs="+", type=str, default=['/root/scripts/dataset-t80.pkl'])
     parser.add_argument("--models", type=str, default="mlp")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--mode", type=int, default=0)
@@ -238,7 +238,7 @@ if __name__ == "__main__":
         "--split-scheme",
         type=str,
         choices=["by_task", "within_task", "by_target"],
-        default="by_target",
+        default="by_task",
     )
     parser.add_argument("--train-ratio", type=float, default=0.9)
     parser.add_argument("--use-gpu", type=str2bool, nargs='?',
@@ -285,7 +285,7 @@ if __name__ == "__main__":
         ("bert_tiny", [(1, 128)]),
     ]
     mm=args.dataset[0].split('-')[-1].split('.')[0]
-    target = 'cuda -model=k80'
+    target = 'cuda -model=t4'
     top_ks = [1, 5]
     top_1_total = []
     top_5_total = []

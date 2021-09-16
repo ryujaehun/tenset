@@ -240,7 +240,7 @@ if __name__ == "__main__":
         choices=["by_task", "within_task", "by_target"],
         default="by_task",
     )
-    parser.add_argument("--train-ratio", type=float, default=0.9)
+    parser.add_argument("--train-ratio", type=float, default=0.8)
     parser.add_argument("--use-gpu", type=str2bool, nargs='?',
                         const=True, default=False,
                         help="Whether to use GPU for xgb.")
@@ -285,8 +285,8 @@ if __name__ == "__main__":
         ("bert_tiny", [(1, 128)]),
     ]
     mm=args.dataset[0].split('-')[-1].split('.')[0]
-    # target = 'cuda -model=k80'
-    target = 'llvm -model=epyc-7452'
+    target = 'cuda -model=k80'
+    # target = 'llvm -model=epyc-7452'
     top_ks = [1, 5]
     top_1_total = []
     top_5_total = []

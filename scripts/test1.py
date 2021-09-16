@@ -11,7 +11,7 @@ os.makedirs(f"log/{today}", exist_ok=True)
 import time
 maml = [False,True]
 
-loss = ['rmse','rankNetLoss','lambdaRankLoss','listNetLoss']
+loss = ['rmse','rankNetLoss','lambdaRankLoss']
 model = ['mlp','transformer','lstm','tab']
 lr = [5e-5]
 wd = [5e-5]

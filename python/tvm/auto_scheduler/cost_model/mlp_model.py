@@ -384,7 +384,6 @@ class MLPModelInternal:
         }
 
         elif self.args.models =='transformer':
-            print(3)
             self.batch_size = 1024
             self.infer_batch_size = 1024
             self.net_params = {
