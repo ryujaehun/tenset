@@ -264,7 +264,7 @@ class OneShotModule(torch.nn.Module):
         )
 
         self.encoder_layer = torch.nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads,dropout=0.2)
-        self.transformer_encoder = torch.nn.TransformerEncoder(self.encoder_layer, 3)
+        self.transformer_encoder = torch.nn.TransformerEncoder(self.encoder_layer, 2)
 
 
         self.decoder = torch.nn.Sequential(
@@ -415,7 +415,8 @@ class MLPModelInternal:
         self.target_id_dict = {}
         loss_type = self.loss_type = self.args.loss
         
-        
+        self.n_epoch = 100
+        self.lr = 7e-4
 
         if loss_type == 'rmse' or loss_type == 'rmse':
             self.loss_func = torch.nn.MSELoss()
@@ -437,8 +438,6 @@ class MLPModelInternal:
         else:
             raise ValueError("Invalid loss type: " + loss_type)
 
-        self.n_epoch = 80
-        self.lr = self.args.lr
         self.grad_clip = 0.5
         if self.args.maml:
             few_shot_learning='MAML'
@@ -449,7 +448,7 @@ class MLPModelInternal:
 
         # Hyperparameters for self.fit_base
         
-        self.wd = self.args.wd
+        self.wd = 1e-6
         self.device = device
         self.print_per_epoches = 5
 
@@ -575,8 +574,7 @@ class MLPModelInternal:
         
         train_loader = SegmentDataLoader(
             train_set, self.batch_size, self.device, self.use_workload_embedding, self.use_target_embedding,
-            self.target_id_dict, shuffle=True,num_workers=12,prefetch_factor=4,pin_memory=True
-        )
+            self.target_id_dict, shuffle=True  )
 
         # Normalize features
         if self.fea_norm_vec is None:
@@ -902,6 +900,8 @@ class MLPModelInternal:
         return net
 
     def _fine_tune_a_model(self, model, train_set, valid_set=None, verbose=1):
+        if self.fine_tune_num_steps == 0:
+            return model
         if verbose >= 1:
             print("=" * 60 + "\nFine-tune a net. Train size: %d" % len(train_set))
 

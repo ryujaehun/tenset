@@ -137,7 +137,7 @@ def preset_batch_size_1():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--logs", nargs="+", type=str)
-    parser.add_argument("--target", type=str, default=['llvm -model=epyc-7452'])# -mtriple=aarch64-linux-gnu -mattr=+neon,+v8.2a,+dotprod -model=graviton2'])#["llvm -model=epyc-7452"])
+    parser.add_argument("--target", type=str, default=['cuda -model=k80'])# -mtriple=aarch64-linux-gnu -mattr=+neon,+v8.2a,+dotprod -model=graviton2'])#["llvm -model=epyc-7452"])
     parser.add_argument("--sample-in-files", type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out-file", type=str, default='dataset.pkl')

@@ -13,7 +13,7 @@ import time
 maml = [False,True]
 
 loss = ['rmse','lambdaRankLoss']
-model = ['mlp','oneshot','lstm']
+model = ['mlp','oneshot']
 lr = [5e-5]
 wd = [5e-5]
 
@@ -30,10 +30,10 @@ class Worker(threading.Thread):
         idx += 1
         if self.maml:
             text = f"docker run --ipc=host -it --gpus '\"device={idx%count}\"' --cpus 8 --rm  -v /home/jaehun/tenset/2080:/build -v /home/jaehun/tenset:/root/tvm -v /home/jaehun/tenset:/root test:latest python3 /root/scripts/train_model_2.py \
-         --wandb --maml  --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/NEW_EXP_2_MAML_{self.model}_{self.loss}.log"
+         --wandb --maml  --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/NEW_EXP_7_MAML_{self.model}_{self.loss}.log"
         else:
             text = f"docker run --ipc=host -it --gpus '\"device={idx%count}\"' --cpus 8 --rm  -v /home/jaehun/tenset/2080:/build -v /home/jaehun/tenset:/root/tvm -v /home/jaehun/tenset:/root test:latest python3 /root/scripts/train_model_2.py \
-         --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/NEW_EXP_2_{self.model}_{self.loss}.log"
+         --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/NEW_EXP_7_{self.model}_{self.loss}.log"
         proc = subprocess.Popen(text, shell=True, executable='/bin/bash')
         _ = proc.communicate()
         time.sleep(3)

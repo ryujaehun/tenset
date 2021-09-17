@@ -222,7 +222,7 @@ if __name__ == "__main__":
         choices=["by_task", "within_task", "by_target"],
         default="by_task",
     )
-    parser.add_argument("--train-ratio", type=float, default=0.5)
+    parser.add_argument("--train-ratio", type=float, default=0.25)
     parser.add_argument("--use-gpu", type=str2bool, nargs='?',
                         const=True, default=False,
                         help="Whether to use GPU for xgb.")
@@ -230,11 +230,11 @@ if __name__ == "__main__":
     print("Arguments: %s" % str(args))
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'META_{args.models}_{args.loss}',project=f"NEW_EXP_1", tags=[f"META",f'{args.models}'])
+            wandb.init(name=f'META_{args.models}_{args.loss}',project=f"NEW_EXP_6", tags=[f"META",f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}',project=f"NEW_EXP_1", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}',project=f"NEW_EXP_6", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}',project=f"NEW_EXP_1", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}',project=f"NEW_EXP_6", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
