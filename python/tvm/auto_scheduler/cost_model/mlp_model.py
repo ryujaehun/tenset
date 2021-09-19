@@ -672,16 +672,10 @@ class MLPModelInternal:
             self.target_id_dict[target] = len(self.target_id_dict)
     def _metatune_a_model(self, train_set, valid_set, valid_train_set=None):
         net = make_net(self.net_params).to(self.device)
-        # for _ in range(20):
-        self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set,epoch=60)
-        # for _ in range(20):
-        self._fit_METATUNE(net,train_set,valid_set,valid_train_set,epoch=100)
-        
+        self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set,epoch=80)
+        self._fit_METATUNE(net,train_set,valid_set,valid_train_set,epoch=80)
         return net
-        # mode 1. 반복해서 전체 학습 / 마지막 layer 학습
 
-        # mode 2. N iteration 학습 and 마지막 layer 학습
-        # pass
 
     def _fine_tune_for_metatune(self,  model,train_set, valid_set=None,valid_train_set=None, epoch=3):
 
@@ -773,16 +767,35 @@ class MLPModelInternal:
             if train_loss < best_train_loss:
                 best_train_loss = train_loss
                 best_epoch = epoch
-            
+    def _start(self,model,base_param):
+
+        with torch.no_grad():
+            for name, w in model.named_parameters():
+                w.copy_(base_param[name])
+    def _end(self,model,index,base_params):
+        base_param = {
+            name: w.clone().detach() for name, w in model.named_parameters() #if w.requires_grad and "decode" not in name    
+        }
+        base_params[index] = base_param
+    def _sync_weight(self,model,model_weights,base_param):
+        _base_param = {name: w.clone().detach() for name, w in base_param.items()}
+        # task 방향으로 1/tasks번 update 해야뎀 ! 중요 
+        scale = 1/len(model_weights.items())
+        for k,model_weight in model_weights.items():
+            for name,w in model_weight.items():
+                base_param[name].data -= scale*self.meta_outer_lr * (base_param[name].data - w.data)
+        for name, w in model.named_parameters():
+            w.data += base_param[name] - _base_param[name]
     def _fit_METATUNE(self, model,train_set, valid_set=None, valid_train_set=None,epoch=10):
+        # Large-Scale Meta-Learning with Continual Trajectory Shifting (ICML21,jaewoong et al.)
+        # https://github.com/JWoong148/ContinualTrajectoryShifting
         
+
         batch_size_tasks = self.meta_batch_size_tasks
         batch_size_per_task = self.meta_batch_size_per_task
         few_shot_number = self.few_shot_number
 
         print_per_batches = 100
-        n_batches = 3000
-        early_stop = 200
         
         # Compute normalization vector over the whole dataset
         if self.fea_norm_vec is None:
@@ -791,8 +804,6 @@ class MLPModelInternal:
             )
             self.fea_norm_vec = all_train_loader.normalize()
             del all_train_loader
-
-        
       
         if valid_set:
             for task in valid_set.tasks():
@@ -800,102 +811,95 @@ class MLPModelInternal:
             valid_loader = SegmentDataLoader(valid_set, self.infer_batch_size, self.device, self.use_workload_embedding,
                                              self.use_target_embedding, self.target_id_dict,fea_norm_vec=self.fea_norm_vec)
 
-     
         # Build dataloaders
+        total_dataset_length = 0
         train_loaders = {}
         for task in train_set.features:
             task_dataset = train_set.extract_subset([task])
+            
             train_loaders[task] = SegmentDataLoader(
                 task_dataset, None, self.device, self.use_workload_embedding,
                 fea_norm_vec=self.fea_norm_vec, shuffle=True,
             )
-            
+            total_dataset_length +=len(train_loaders[task])
 
-        # Make network
         net = model.to(self.device)
-        # optimizer = torch.optim.Adam(
-        #     net.parameters(), lr=self.meta_outer_lr, weight_decay=self.wd
-        # )   
-        inner_optimiser = torch.optim.SGD(net.decoder.parameters(), lr=self.meta_inner_lr)
-        meta_optimizer = torch.optim.Adam(net.decoder.parameters(), lr=self.meta_outer_lr)
+        optimizer = torch.optim.Adam(
+            net.parameters(), lr=self.meta_outer_lr, weight_decay=self.wd
+        )   
+        
 
-
-        # Training
-        avg_outer_loss = None
-        avg_inner_loss = None
         task_list = list(train_set.tasks())
-        best_batch = None
-        best_train_loss = 1e10
+   
         net.train()
 
-        for batch in range(epoch):
+
+        avg_loss = None
+        total_epoch = int(total_dataset_length*epoch/32)
+        print(f"Task Batch {total_epoch}")
+        # epoch 100 * 32 개가 전체 데이터셋 크기 
+        # round(len(total dataset)*epoch / 32)
+
+        for batch in range(total_epoch):
             tasks = random.choices(task_list, k=batch_size_tasks)
             net.zero_grad()
-            outer_loss = torch.tensor(0.0, device=self.device)
+            base_param = {
+                name: w.clone().detach() for name, w in net.named_parameters() 
+            }
+            model_weights = {i:None for i in range(len(tasks))}
             # outer loss
-            for task in tasks:
-                with higher.innerloop_ctx(net, inner_optimiser, copy_initial_weights=False) as (fmodel, diffopt):
+            
+            for task_idx,task in enumerate(tasks):
+                # with higher.innerloop_ctx(net, inner_optimiser, copy_initial_weights=False) as (fmodel, diffopt):
+                    #아.. 각 task별로 loader 가 존재 .. ? 
+                train_loader = train_loaders[task]
+            
 
-                    train_loader = train_loaders[task]
-
-                    train_segment_sizes, train_features, train_labels = train_loader.sample_batch(
-                        few_shot_number
-                    )
-                    test_segment_sizes, test_features, test_labels = train_loader.sample_batch(
-                        batch_size_per_task
-                    )
-
-                    # inner loss
-                    # params = OrderedDict(net.meta_named_parameters())
-                    inner_loss = self.loss_func(
+                train_segment_sizes, train_features, train_labels = train_loader.sample_batch(
+                    few_shot_number
+                )
+               
+                self._start(net,base_param)
+                net.train()
+                # independent하게 .. train 해야 
+                loss = self.loss_func(
                         net(train_segment_sizes, train_features), train_labels
                     )
-                    diffopt.step(inner_loss)
-                 
-                    
-                 
-                    avg_inner_loss = moving_average(avg_inner_loss, inner_loss.item())
 
-                    # acculate gradient for meta-update
-                    outer_loss += self.loss_func(
-                        net(test_segment_sizes, test_features), test_labels
-                    )
+                
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                self._end(net,task_idx,model_weights)
+                avg_loss = moving_average(avg_loss, loss.item())
+            
+            self._sync_weight(net,model_weights,base_param)
+            
 
-
-
-            outer_loss /= len(tasks)
-            outer_loss.backward()
-            meta_optimizer.step()
-            torch.nn.utils.clip_grad_norm_(net.parameters(), self.grad_clip)
-
-            avg_outer_loss = moving_average(avg_outer_loss, outer_loss.item())
-
-            if batch % print_per_batches == 0 or batch == n_batches - 1:
+            if batch % print_per_batches == 0 :
                 # validate
                 valid_loss = self._validate(net, valid_loader)
                 print(
-                    "Task Batch: %d\tOuter RMSE: %.4f\tInner RMSE: %.4f\tValid RMSE: %.4f"
+                    "Task Batch: TRAIN %d\t RMSE: %.4f\tValid RMSE: %.4f"
                     % (
                         batch,
-                        np.sqrt(avg_outer_loss),
-                        np.sqrt(avg_inner_loss),
+                        np.sqrt(avg_loss),
                         np.sqrt(valid_loss),
                     )
                 )
                 if self.wandb != None:
                     self.wandb.log({
                     "batch": batch,
-                    "Outer RMSE": np.sqrt(avg_outer_loss),
-                    "Inner RMSE":  np.sqrt(avg_inner_loss),
+                    "Train RMSE": np.sqrt(avg_loss),
                     "Valid RMSE":  np.sqrt(valid_loss)})
                  
-            # Early stop
-            if avg_outer_loss < best_train_loss:
-                best_train_loss = avg_outer_loss
-                best_batch = batch
-            elif batch - best_batch >= early_stop:
-                print("Early stop. Best batch: %d" % best_batch)
-                break
+            # # Early stop
+            # if avg_outer_loss < best_train_loss:
+            #     best_train_loss = avg_outer_loss
+            #     best_batch = batch
+            # elif batch - best_batch >= early_stop:
+            #     print("Early stop. Best batch: %d" % best_batch)
+            #     break
 
         return net
 

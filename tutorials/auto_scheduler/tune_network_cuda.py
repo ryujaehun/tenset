@@ -200,7 +200,7 @@ def run_tuning():
 # We do not run the tuning in our webpage server since it takes too long.
 # Uncomment the following line to run it by yourself.
 
-# run_tuning()
+run_tuning()
 
 
 ######################################################################

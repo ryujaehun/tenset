@@ -22,7 +22,8 @@ from tqdm import tqdm
 
 import tvm
 from tvm import auto_scheduler
-
+import logging
+logging.getLogger('auto_scheduler').setLevel(logging.DEBUG)
 from common import (load_and_register_tasks,
     get_measure_record_filename, get_to_measure_filename)
 
@@ -82,7 +83,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", type=str, required=True)
     parser.add_argument("--target-host", type=str)
-    parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--start-idx", type=int, default=0)
     parser.add_argument("--end-idx", type=int, default=1000000)
     parser.add_argument("--step-idx", type=int, default=1)
@@ -105,7 +106,7 @@ if __name__ == "__main__":
             "run_timeout": 5,
             "number": 1,
             "enable_cpu_cache_flush": True,
-            "verbose": 1,
+            "verbose": 3,
         }
         if task.compute_dag.flop_ct >= 2416443392.0:
             measurer_kwargs['repeat'] = 4
@@ -115,7 +116,6 @@ if __name__ == "__main__":
             measurer_kwargs['repeat'] = 10
         else:
             measurer_kwargs['repeat'] = 8
-
         # Run measurement
         task_key = (task.workload_key, str(task.target.kind))
         target = tvm.target.Target(args.target)

@@ -10,13 +10,16 @@ import tvm
 from tvm.auto_scheduler.utils import to_str_round
 from tvm.auto_scheduler.cost_model import RandomModelInternal
 
+
 from common2 import load_and_register_tasks, str2bool,nameset
+from common2 import get_task_info_filename, get_measure_record_filename
 
 from tvm.auto_scheduler.dataset import Dataset, LearningTask
 from tvm.auto_scheduler.cost_model.xgb_model import XGBModelInternal
 from tvm.auto_scheduler.cost_model.mlp_model import MLPModelInternal
 from tvm.auto_scheduler.cost_model.lgbm_model import LGBModelInternal
 from tvm.auto_scheduler.cost_model.tabnet_model import TabNetModelInternal
+
 from tvm.auto_scheduler.cost_model.metric import (
     metric_rmse,
     metric_r_squared,
@@ -28,12 +31,15 @@ from tvm.auto_scheduler.cost_model.metric import (
 )
 from tvm import auto_scheduler
 from tvm.auto_scheduler.dataset import LearningTask
-from common import get_task_info_filename, get_measure_record_filename
-import os 
 
-def evaluate_model(model, test_set,ratio=1):
+import os 
+from copy import deepcopy
+def evaluate_model(model, test_set,ratio=1,epoch=0):
     # make prediction
+    model.fine_tune_num_steps = epoch
+    m = deepcopy(model.base_model)
     prediction = model.predict(test_set)
+    
 
     # compute weighted average of metrics over all tasks
     tasks = list(test_set.tasks())
@@ -69,7 +75,7 @@ def evaluate_model(model, test_set,ratio=1):
     mape = np.average(mape_list, weights=weights)
     peak_score1 = np.average(peak_score1_list, weights=weights)
     peak_score5 = np.average(peak_score5_list, weights=weights)
-
+    model.base_model = m
     eval_res = {
         "RMSE": rmse,
         "R^2": r_sqaured,
@@ -186,9 +192,9 @@ def eval_cost_model_on_network(model, network_key, target, top_ks,args):
             filenames, dataset_file, min_sample_size=0)
     dataset = pickle.load(open(dataset_file, "rb"))
     if args.maml:
-        eval_res = evaluate_model(model, dataset,0.8)
+        eval_res = evaluate_model(model, dataset,0.7,args.epoch)
     else:
-        eval_res = evaluate_model(model, dataset,1)
+        eval_res = evaluate_model(model, dataset,0.7,args.epoch)
     print(to_str_round(eval_res))
     print("===============================================")
 
@@ -200,7 +206,14 @@ def eval_cost_model_on_network(model, network_key, target, top_ks,args):
     return eval_cost_model_on_weighted_tasks(model, task_dict, dataset, top_ks),eval_res
 
 
-
+TARGET_TABLE = {
+  'arm':'graviton2',
+  'plat':'platinum-8272',
+  'e5':'e5-2673',
+  'epyc':'epyc-7452',
+  'k80':'k80',
+  't4':'t4',
+}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -212,9 +225,10 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--meta_outer_lr", type=float, default=1e-4)
     parser.add_argument("--meta_inner_lr", type=float, default=1e-4)
-    parser.add_argument("--dataset", type=str, default='e5',choices=['k80','t4','e5'])
+    parser.add_argument("--dataset", type=str, default=['arm','plat','e5','epyc','k80','t4'],choices=['k80','t4','e5'])
     parser.add_argument("--models", type=str, default="mlp")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--epoch", type=int, default=0)
     parser.add_argument("--wandb", default=False, action="store_true")
     parser.add_argument(
         "--split-scheme",
@@ -222,7 +236,7 @@ if __name__ == "__main__":
         choices=["by_task", "within_task", "by_target"],
         default="by_task",
     )
-    parser.add_argument("--train-ratio", type=float, default=0.5)
+    parser.add_argument("--train-ratio", type=float, default=0.25)
     parser.add_argument("--use-gpu", type=str2bool, nargs='?',
                         const=True, default=False,
                         help="Whether to use GPU for xgb.")
@@ -230,15 +244,15 @@ if __name__ == "__main__":
     print("Arguments: %s" % str(args))
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'MAML_{args.models}_{args.loss}',project=f"NEW_EXP_3", tags=[f"META",f'{args.models}'])
+            wandb.init(name=f'META_{args.models}_{args.loss}',project=f"BASELINE_PRETRAIN", tags=[f"META",f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}',project=f"NEW_EXP_3", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}',project=f"BASELINE_PRETRAIN", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}',project=f"NEW_EXP_3", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}',project=f"BASELINE_PRETRAIN", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
-    args.save = f'EXP_3_{args.models}_{args.loss}'
+    args.save = f'BASELINE_PRETRAIN_{args.models}_{args.loss}'
     if args.maml:
         args.save += f'_maml'
     # Setup random seed and logging
@@ -247,22 +261,19 @@ if __name__ == "__main__":
     torch.random.manual_seed(args.seed)
     logging.basicConfig()
     logging.getLogger("auto_scheduler").setLevel(logging.DEBUG)
-    if args.dataset in ['k80','t4']:
-        nameset('gpu')
-    elif args.dataset in ['e5']:
-        nameset('cpu')
-    else:
-        raise('Invalid datset')
+    
     print("Load all tasks...")
+    nameset('cpu')
     load_and_register_tasks()
-
+    nameset('gpu')
+    load_and_register_tasks()
+    
     print("Load dataset...")
 
-    dataset = pickle.load(open(f'/root/scripts/small-{args.dataset}.pkl', "rb"))
-    # for i in range(1, len(args.dataset)):
-    tmp_dataset = pickle.load(open(f'/root/scripts/small-epyc.pkl', "rb"))
-    dataset.update_from_dataset(tmp_dataset)
-
+    dataset = pickle.load(open(f'/root/scripts/full-dataset-{args.dataset[0]}.pkl', "rb"))
+    for i in range(1, len(args.dataset)):
+        tmp_dataset = pickle.load(open(f'/root/scripts/full-dataset-{args.dataset[i]}.pkl', "rb"))
+        dataset.update_from_dataset(tmp_dataset)
     model = train_zero_shot(dataset, args.train_ratio, args.models, args.split_scheme, args.use_gpu,args,wandb)
     
     network_keys = [
@@ -272,56 +283,60 @@ if __name__ == "__main__":
         ("bert_base", [(1, 128)]),
         ("bert_tiny", [(1, 128)]),
     ]
-    # if args.dataset in ['t4','k80']:
-    nameset('gpu')
-    target = f'cuda -model=k80'
-    # elif args.dataset in ['e5']:
-    #     target = f'llvm -model={args.dataset}'
-    top_ks = [1, 5]
-    top_1_total = []
-    top_5_total = []
-    RMSE_total = []
-    RSqure_total = []
-    pairwise_total = []
-    mape_total = []
     args.eval = True
-  
-    for network_key in network_keys:
-        (latencies, best_latency) , eval_res = eval_cost_model_on_network(model, network_key, target, top_ks,args)
-
-        for top_k, latency in zip(top_ks, latencies):
-            print(f"Network: {network_key}\tTop-{top_k} score: {best_latency / latency}")
+    for _epoch in [0,1,4,8,16,32]:
+        args.epoch = _epoch
+        for _target in args.dataset:
+            if _target in ['t4','k80']:
+                print(_target)
+                target = f'cuda -model={TARGET_TABLE[_target]}'
+                nameset('gpu')
+                load_and_register_tasks()
+            elif _target in ['e5','epyc','plat','arm']:
+                print(_target)
+                target = f'llvm -model={TARGET_TABLE[_target]}'
+                nameset('cpu')
+                load_and_register_tasks()
+            top_ks = [1, 5]
+            top_1_total = []
+            top_5_total = []
+            RMSE_total = []
+            RSqure_total = []
+            pairwise_total = []
+            mape_total = []
             
-        
-        top_1_total.append(best_latency/latencies[0])
-        print(f"top 1 score: {best_latency/latencies[0]}")
-        top_5_total.append(best_latency / latencies[1])
-        print(f"top 5 score: {best_latency / latencies[1]}")
-        RMSE_total.append(eval_res['RMSE'])
-        RSqure_total.append(eval_res['R^2'])
-        pairwise_total.append(eval_res['pairwise comparision accuracy'])
-        mape_total.append(eval_res['mape'])
-        if args.wandb:
-            wandb.log({
-                        f"Eval {network_key} RMSE": eval_res['RMSE'],
-                        f"Eval {network_key} R^2": eval_res['R^2'],
-                        f"Eval {network_key} pairwise comparision accuracy": eval_res['pairwise comparision accuracy'],
-                        f"Eval {network_key} mape": eval_res['mape'],
-                        f"Eval {network_key} Top-1 score": (best_latency / latencies[0]),
-                        f"Eval {network_key} Top-5 score": (best_latency / latencies[1]),
-                        }, )
-    if args.wandb:
-        wandb.log({
-                    f"final RMSE": sum(RMSE_total) / len(RMSE_total),
-                    f"final R^2": sum(RSqure_total) / len(RSqure_total),
-                    f"final pairwise comparision accuracy": sum(pairwise_total) / len(pairwise_total),
-                    f"final mape": sum(mape_total) / len(mape_total),
-                    f"final Top-1 score": sum(top_1_total) / len(top_1_total),
-                    f"final Top-5 score": sum(top_5_total) / len(top_5_total),
-                    }, )
-    print(f"average top 1 score is {sum(top_1_total) / len(top_1_total)}")
-    print(f"average top 5 score is {sum(top_5_total) / len(top_5_total)}")
+            for network_key in network_keys:
+                (latencies, best_latency) , eval_res = eval_cost_model_on_network(model, network_key, target, top_ks,args)
 
- 
-
-
+                for top_k, latency in zip(top_ks, latencies):
+                    print(f"Device {_target} Adaptation Step {_epoch} Network: {network_key}\tTop-{top_k} score: {best_latency / latency}")
+                    
+                
+                top_1_total.append(best_latency/latencies[0])
+                print(f"top 1 score: {best_latency/latencies[0]}")
+                top_5_total.append(best_latency / latencies[1])
+                print(f"top 5 score: {best_latency / latencies[1]}")
+                RMSE_total.append(eval_res['RMSE'])
+                RSqure_total.append(eval_res['R^2'])
+                pairwise_total.append(eval_res['pairwise comparision accuracy'])
+                mape_total.append(eval_res['mape'])
+                if args.wandb:
+                    wandb.log({
+                                f"Eval {_epoch} {_target} {network_key} RMSE": eval_res['RMSE'],
+                                f"Eval {_epoch} {_target} {network_key} R^2": eval_res['R^2'],
+                                f"Eval {_epoch} {_target} {network_key} pairwise comparision accuracy": eval_res['pairwise comparision accuracy'],
+                                f"Eval {_epoch} {_target} {network_key} mape": eval_res['mape'],
+                                f"Eval {_epoch} {_target} {network_key} Top-1 score": (best_latency / latencies[0]),
+                                f"Eval {_epoch} {_target} {network_key} Top-5 score": (best_latency / latencies[1]),
+                                }, )
+            if args.wandb:
+                wandb.log({
+                            f"final {_epoch} {_target} RMSE": sum(RMSE_total) / len(RMSE_total),
+                            f"final {_epoch} {_target} R^2": sum(RSqure_total) / len(RSqure_total),
+                            f"final {_epoch} {_target} pairwise comparision accuracy": sum(pairwise_total) / len(pairwise_total),
+                            f"final {_epoch} {_target} mape": sum(mape_total) / len(mape_total),
+                            f"final {_epoch} {_target} Top-1 score": sum(top_1_total) / len(top_1_total),
+                            f"final {_epoch} {_target} Top-5 score": sum(top_5_total) / len(top_5_total),
+                            }, )
+            print(f"average top 1 score is {sum(top_1_total) / len(top_1_total)}")
+            print(f"average top 5 score is {sum(top_5_total) / len(top_5_total)}")
