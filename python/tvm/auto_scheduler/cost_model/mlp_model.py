@@ -970,7 +970,7 @@ class MLPModelInternal:
         
         
         for task, features in dataset.features.items():
-            if self.args.maml and self.args.eval:
+            if  self.args.eval:
                 base_model = deepcopy(model)
                 length = int(len(features)*0.7)
                 idx = np.arange(len(features))[:length]
