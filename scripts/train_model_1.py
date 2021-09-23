@@ -248,15 +248,15 @@ if __name__ == "__main__":
         _data+='_'+i
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'META_{args.models}_{args.loss}_TRAIN_{_data}',project=f"SMALL_TRAIN", tags=[f"META",f'{args.models}'])
+            wandb.init(name=f'META_{args.models}_{args.loss}_TRAIN_{_data}',project=f"SMALL_TRAIN2", tags=[f"META",f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}_TRAIN_{_data}',project=f"SMALL_TRAIN", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}_TRAIN_{_data}',project=f"SMALL_TRAIN2", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}_TRAIN_{_data}',project=f"SMALL_TRAIN", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}_TRAIN_{_data}',project=f"SMALL_TRAIN2", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
-    args.save = f'SMALL_{args.models}_{args.loss}{_data}'
+    args.save = f'2_SMALL_{args.models}_{args.loss}{_data}'
     if args.maml:
         args.save += f'_maml'
     # Setup random seed and logging

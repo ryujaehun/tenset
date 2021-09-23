@@ -5,7 +5,7 @@ from datetime import datetime
 import torch
 import threading
 today = datetime.today().strftime('%Y-%m-%d')
-count = 3#torch.cuda.device_count()
+count = torch.cuda.device_count()
 sem = threading.Semaphore(count)
 idx = 0
 os.makedirs(f"log/{today}", exist_ok=True)
@@ -31,10 +31,10 @@ class Worker(threading.Thread):
         name = self.dataset.replace(' --dataset','').replace(' ','_')
         if self.maml:
             text = f"docker run --ipc=host -it --gpus '\"device={idx%count}\"' --cpus 8 --rm  -v /home/jaehun/tenset/2080:/build -v /home/jaehun/tenset:/root/tvm -v /home/jaehun/tenset:/root test:latest python3 /root/scripts/train_model_1.py \
-          {self.dataset} --maml --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/MAML_SMALL_{name}_{self.model}_{self.loss}.log"
+          {self.dataset} --maml --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/2_MAML_SMALL_{name}_{self.model}_{self.loss}.log"
         else:
             text = f"docker run --ipc=host -it --gpus '\"device={idx%count}\"' --cpus 8 --rm  -v /home/jaehun/tenset/2080:/build -v /home/jaehun/tenset:/root/tvm -v /home/jaehun/tenset:/root test:latest python3 /root/scripts/train_model_1.py \
-            {self.dataset} --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/SMALL_{name}_{self.model}_{self.loss}.log"
+            {self.dataset} --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/2_SMALL_{name}_{self.model}_{self.loss}.log"
         proc = subprocess.Popen(text, shell=True, executable='/bin/bash')
         _ = proc.communicate()
         time.sleep(3)
