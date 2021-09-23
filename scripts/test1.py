@@ -11,7 +11,7 @@ idx = 0
 os.makedirs(f"log/{today}", exist_ok=True)
 import time
 
-loss = ['lambdaRankLoss']
+loss = ['rmse']
 model = ['oneshot']
 device = [' --dataset e5 ',' --dataset e5 --dataset plat ',' --dataset e5 --dataset plat --dataset epyc '\
     ,' --dataset e5 --dataset plat --dataset epyc --dataset arm',' --dataset e5 --dataset plat --dataset epyc --dataset arm --dataset k80 ',' --dataset e5 --dataset plat --dataset epyc --dataset arm --dataset k80 ',' --dataset e5 --dataset plat --dataset epyc --dataset arm --dataset k80 --dataset t4 ']

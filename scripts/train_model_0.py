@@ -248,11 +248,11 @@ if __name__ == "__main__":
         _data+='_'+i
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'META_{args.models}_{args.loss}_TRAIN_{_data}',project=f"BASELINE_PRETRAIN_TRAIN_3", tags=[f"META",f'{args.models}'])
+            wandb.init(name=f'META_{args.models}_{args.loss}_TRAIN_{_data}',project=f"BASELINE_PRETRAIN_TRAIN_4", tags=[f"META",f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}_TRAIN_{_data}',project=f"BASELINE_PRETRAIN_TRAIN_3", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}_TRAIN_{_data}',project=f"BASELINE_PRETRAIN_TRAIN_4", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}_TRAIN_{_data}',project=f"BASELINE_PRETRAIN_TRAIN_3", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}_TRAIN_{_data}',project=f"BASELINE_PRETRAIN_TRAIN_4", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
