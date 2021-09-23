@@ -44,7 +44,6 @@ def evaluate_model(model, test_set,ratio=1,epoch=0):
     # compute weighted average of metrics over all tasks
     tasks = list(test_set.tasks())
     weights = [len(test_set.throughputs[t]) for t in tasks]
-    print("Test set sizes:", weights)
 
     rmse_list = []
     r_sqaured_list = []
@@ -219,13 +218,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--save",  type=str, default='')
     parser.add_argument("--loss",  type=str, default='rmse')
-    parser.add_argument("--maml", default=False, action="store_true")
+    parser.add_argument("--maml", default=True, action="store_true")
     parser.add_argument("--eval", default=False, action="store_true")
     parser.add_argument("--wd", type=float, default=1e-4)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--meta_outer_lr", type=float, default=1e-4)
     parser.add_argument("--meta_inner_lr", type=float, default=1e-4)
-    parser.add_argument("--dataset", type=str, action='append',default=[],choices=['arm','plat','e5','epyc','k80','t4'])
+    parser.add_argument("--dataset", type=str, default=['e5'],choices=['k80','t4','e5'])
     parser.add_argument("--models", type=str, default="mlp")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--epoch", type=int, default=0)
@@ -236,27 +235,23 @@ if __name__ == "__main__":
         choices=["by_task", "within_task", "by_target"],
         default="by_task",
     )
-    parser.add_argument("--train-ratio", type=float, default=0.90)
+    parser.add_argument("--train-ratio", type=float, default=0.25)
     parser.add_argument("--use-gpu", type=str2bool, nargs='?',
                         const=True, default=False,
                         help="Whether to use GPU for xgb.")
     args = parser.parse_args()
     print("Arguments: %s" % str(args))
-    _data = ''
-    print(args.dataset)
-    for i in args.dataset:
-        _data+='_'+i
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'META_{args.models}_{args.loss}_TRAIN_{_data}',project=f"SMALL_TRAIN", tags=[f"META",f'{args.models}'])
+            wandb.init(name=f'META_{args.models}_{args.loss}',project=f"BASELINE_PRETRAIN", tags=[f"META",f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}_TRAIN_{_data}',project=f"SMALL_TRAIN", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}',project=f"BASELINE_PRETRAIN", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}_TRAIN_{_data}',project=f"SMALL_TRAIN", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}',project=f"BASELINE_PRETRAIN", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
-    args.save = f'SMALL_{args.models}_{args.loss}{_data}'
+    args.save = f'BASELINE_PRETRAIN_{args.models}_{args.loss}'
     if args.maml:
         args.save += f'_maml'
     # Setup random seed and logging
@@ -274,10 +269,10 @@ if __name__ == "__main__":
     
     print("Load dataset...")
 
-    dataset = pickle.load(open(f'/root/scripts/small-{args.dataset[0]}.pkl', "rb"))
-    for i in range(1, len(args.dataset)):
-        tmp_dataset = pickle.load(open(f'/root/scripts/small-{args.dataset[i]}.pkl', "rb"))
-        dataset.update_from_dataset(tmp_dataset)
+    dataset = pickle.load(open(f'/root/scripts/very-small-{args.dataset[0]}.pkl', "rb"))
+    # for i in range(1, len(args.dataset)):
+    #     tmp_dataset = pickle.load(open(f'/root/scripts/full-dataset-{args.dataset[i]}.pkl', "rb"))
+    #     dataset.update_from_dataset(tmp_dataset)
     model = train_zero_shot(dataset, args.train_ratio, args.models, args.split_scheme, args.use_gpu,args,wandb)
     
     network_keys = [
@@ -290,7 +285,7 @@ if __name__ == "__main__":
     args.eval = True
     for _epoch in [0,1,4,8,16,32]:
         args.epoch = _epoch
-        for _target in ['arm','plat','e5','epyc','k80','t4']:
+        for _target in args.dataset:
             if _target in ['t4','k80']:
                 print(_target)
                 target = f'cuda -model={TARGET_TABLE[_target]}'
@@ -344,3 +339,7 @@ if __name__ == "__main__":
                             }, )
             print(f"average top 1 score is {sum(top_1_total) / len(top_1_total)}")
             print(f"average top 5 score is {sum(top_5_total) / len(top_5_total)}")
+
+ 
+
+

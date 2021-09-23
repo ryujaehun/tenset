@@ -22,8 +22,7 @@ from tqdm import tqdm
 
 import tvm
 from tvm import auto_scheduler
-import logging
-logging.getLogger('auto_scheduler').setLevel(logging.DEBUG)
+
 from common import (load_and_register_tasks,
     get_measure_record_filename, get_to_measure_filename)
 
@@ -81,9 +80,9 @@ def remeasure_file(task_idx, task, target, target_host, batch_size, measurer_kwa
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--target", type=str, required=True)
+    parser.add_argument("--target", default='cuda -keys=cuda,gpu -arch=sm_75 -max_num_threads=1024 -max_threads_per_block=1024 -registers_per_block=65536 -shared_memory_per_block=49152 -thread_warp_size=32',type=str, required=False)
     parser.add_argument("--target-host", type=str)
-    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--batch-size", type=int, default=5)
     parser.add_argument("--start-idx", type=int, default=0)
     parser.add_argument("--end-idx", type=int, default=1000000)
     parser.add_argument("--step-idx", type=int, default=1)
@@ -105,8 +104,8 @@ if __name__ == "__main__":
         measurer_kwargs = {
             "run_timeout": 5,
             "number": 1,
-            "enable_cpu_cache_flush": True,
-            "verbose": 3,
+            "enable_cpu_cache_flush": False,
+            "verbose": 4,
         }
         if task.compute_dag.flop_ct >= 2416443392.0:
             measurer_kwargs['repeat'] = 4
@@ -116,6 +115,7 @@ if __name__ == "__main__":
             measurer_kwargs['repeat'] = 10
         else:
             measurer_kwargs['repeat'] = 8
+
         # Run measurement
         task_key = (task.workload_key, str(task.target.kind))
         target = tvm.target.Target(args.target)

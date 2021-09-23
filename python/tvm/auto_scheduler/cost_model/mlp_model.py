@@ -20,9 +20,7 @@ from tvm.auto_scheduler.feature import (
 from tvm.auto_scheduler.measure_record import RecordReader
 from .xgb_model import get_workload_embedding
 from .cost_model import PythonBasedModel
-
 from torch.utils.data import DataLoader
-# class SegmentDataLoader(DataLoader):
 class SegmentDataLoader():
     def __init__(
             self,
@@ -415,8 +413,8 @@ class MLPModelInternal:
         self.target_id_dict = {}
         loss_type = self.loss_type = self.args.loss
         
-        self.n_epoch = 100
-        self.lr = 7e-4
+        self.n_epoch = 70
+        self.lr = 5e-4
 
         if loss_type == 'rmse' or loss_type == 'rmse':
             self.loss_func = torch.nn.MSELoss()
@@ -424,11 +422,9 @@ class MLPModelInternal:
         elif loss_type == 'rankNetLoss':
             self.loss_func = RankNetLoss()
             self.net_params['add_sigmoid'] = False
-            self.n_epoch = 30
         elif loss_type == 'lambdaRankLoss':
             self.loss_func = LambdaRankLoss()
             self.net_params['add_sigmoid'] = False
-            self.lr = 7e-4
             self.n_epoch = 50
         elif loss_type == 'listNetLoss':
             self.loss_func = ListNetLoss()
@@ -448,7 +444,7 @@ class MLPModelInternal:
 
         # Hyperparameters for self.fit_base
         
-        self.wd = 1e-6
+        self.wd = 1e-5
         self.device = device
         self.print_per_epoches = 5
 
@@ -594,8 +590,8 @@ class MLPModelInternal:
         early_stop = n_epoch // 6
 
         net = make_net(self.net_params).to(self.device)
-        if self.wandb!=None:
-            self.wandb.watch(net)
+        # if self.wandb!=None:
+        #     self.wandb.watch(net)
         optimizer = torch.optim.Adam(
             net.parameters(), lr=self.lr, weight_decay=self.wd
         )
@@ -672,8 +668,8 @@ class MLPModelInternal:
             self.target_id_dict[target] = len(self.target_id_dict)
     def _metatune_a_model(self, train_set, valid_set, valid_train_set=None):
         net = make_net(self.net_params).to(self.device)
-        self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set,epoch=80)
-        self._fit_METATUNE(net,train_set,valid_set,valid_train_set,epoch=80)
+        self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set,epoch=70)
+        self._fit_METATUNE(net,train_set,valid_set,valid_train_set,epoch=70)
         return net
 
 
@@ -706,8 +702,8 @@ class MLPModelInternal:
         n_epoch = epoch
 
         net = model.to(self.device)
-        if self.wandb!=None:
-            self.wandb.watch(net)
+        # if self.wandb!=None:
+        #     self.wandb.watch(net)
         optimizer = torch.optim.Adam(
             net.parameters(), lr=self.lr, weight_decay=self.wd
         )
@@ -835,9 +831,10 @@ class MLPModelInternal:
 
 
         avg_loss = None
-        total_epoch = int(total_dataset_length*epoch/32)
+        total_epoch = int(total_dataset_length*epoch/(32*batch_size_tasks))
         print(f"Task Batch {total_epoch}")
         # epoch 100 * 32 개가 전체 데이터셋 크기 
+        # 너무 길어서 5으로 나눔 .. 
         # round(len(total dataset)*epoch / 32)
 
         for batch in range(total_epoch):
@@ -880,9 +877,10 @@ class MLPModelInternal:
                 # validate
                 valid_loss = self._validate(net, valid_loader)
                 print(
-                    "Task Batch: TRAIN %d\t RMSE: %.4f\tValid RMSE: %.4f"
+                    "Task Batch: TRAIN %d/%d\t RMSE: %.4f\tValid RMSE: %.4f"
                     % (
                         batch,
+                        total_epoch,
                         np.sqrt(avg_loss),
                         np.sqrt(valid_loss),
                     )
@@ -893,13 +891,7 @@ class MLPModelInternal:
                     "Train RMSE": np.sqrt(avg_loss),
                     "Valid RMSE":  np.sqrt(valid_loss)})
                  
-            # # Early stop
-            # if avg_outer_loss < best_train_loss:
-            #     best_train_loss = avg_outer_loss
-            #     best_batch = batch
-            # elif batch - best_batch >= early_stop:
-            #     print("Early stop. Best batch: %d" % best_batch)
-            #     break
+          
 
         return net
 

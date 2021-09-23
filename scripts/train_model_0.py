@@ -225,7 +225,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--meta_outer_lr", type=float, default=1e-4)
     parser.add_argument("--meta_inner_lr", type=float, default=1e-4)
-    parser.add_argument("--dataset", type=str, default=['arm','plat','e5','epyc','k80','t4'],choices=['k80','t4','e5'])
+    parser.add_argument("--dataset", type=str, action='append',default=[],choices=['arm','plat','e5','epyc','k80','t4'])
     parser.add_argument("--models", type=str, default="mlp")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--epoch", type=int, default=0)
@@ -236,23 +236,27 @@ if __name__ == "__main__":
         choices=["by_task", "within_task", "by_target"],
         default="by_task",
     )
-    parser.add_argument("--train-ratio", type=float, default=0.25)
+    parser.add_argument("--train-ratio", type=float, default=0.80)
     parser.add_argument("--use-gpu", type=str2bool, nargs='?',
                         const=True, default=False,
                         help="Whether to use GPU for xgb.")
     args = parser.parse_args()
     print("Arguments: %s" % str(args))
+    _data = ''
+    print(args.dataset)
+    for i in args.dataset:
+        _data+='_'+i
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'META_{args.models}_{args.loss}',project=f"BASELINE_PRETRAIN", tags=[f"META",f'{args.models}'])
+            wandb.init(name=f'META_{args.models}_{args.loss}_TRAIN_{_data}',project=f"BASELINE_PRETRAIN_TRAIN_3", tags=[f"META",f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}',project=f"BASELINE_PRETRAIN", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}_TRAIN_{_data}',project=f"BASELINE_PRETRAIN_TRAIN_3", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}',project=f"BASELINE_PRETRAIN", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}_TRAIN_{_data}',project=f"BASELINE_PRETRAIN_TRAIN_3", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
-    args.save = f'BASELINE_PRETRAIN_{args.models}_{args.loss}'
+    args.save = f'BASELINE_PRETRAIN_{args.models}_{args.loss}{_data}'
     if args.maml:
         args.save += f'_maml'
     # Setup random seed and logging
@@ -286,7 +290,7 @@ if __name__ == "__main__":
     args.eval = True
     for _epoch in [0,1,4,8,16,32]:
         args.epoch = _epoch
-        for _target in args.dataset:
+        for _target in ['arm','plat','e5','epyc','k80','t4']:
             if _target in ['t4','k80']:
                 print(_target)
                 target = f'cuda -model={TARGET_TABLE[_target]}'
