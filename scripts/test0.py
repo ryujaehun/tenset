@@ -13,7 +13,18 @@ import time
 
 loss = ['rmse']
 model = ['mlp']
-device = [' --dataset e5 ',' --dataset e5 --dataset plat ',' --dataset e5 --dataset arm ',' --dataset e5 --dataset epyc ',' --dataset e5 --dataset k80 ',' --dataset arm --dataset k80 ',' --dataset k80',' --dataset t4 ',' --dataset t4 --dataset k80' ]
+device = [' --dataset e5 ',
+' --dataset e5 --dataset plat ',
+' --dataset epyc ',
+' --dataset epyc --dataset arm ',
+' --dataset arm ',
+' --dataset e5 --dataset k50 ',
+' --dataset plat ',
+' --dataset e5 --dataset epyc --dataset plat ',
+' --dataset t4 ',
+' --dataset arm --dataset k80 ',
+' --dataset k80 ',
+' --dataset k80',' --dataset t4 ' ]
 
 MAML = [True,False]
 class Worker(threading.Thread):
