@@ -13,8 +13,68 @@ import time
 
 loss = ['rmse']
 model = ['oneshot']
-device = [' --dataset e5 ',' --dataset e5 --dataset plat ',' --dataset e5 --dataset plat --dataset epyc '\
-    ,' --dataset e5 --dataset plat --dataset epyc --dataset arm',' --dataset e5 --dataset plat --dataset epyc --dataset arm --dataset k80 ',' --dataset e5 --dataset plat --dataset epyc --dataset arm --dataset k80 ',' --dataset e5 --dataset plat --dataset epyc --dataset arm --dataset k80 --dataset t4 ']
+device = [' --dataset arm ',
+ ' --dataset plat ',
+ ' --dataset e5 ',
+ ' --dataset epyc ',
+ ' --dataset k80 ',
+ ' --dataset t4 ',
+ ' --dataset arm --dataset plat ',
+ ' --dataset arm --dataset e5 ',
+ ' --dataset arm --dataset epyc ',
+ ' --dataset arm --dataset k80 ',
+ ' --dataset arm --dataset t4 ',
+ ' --dataset plat --dataset e5 ',
+ ' --dataset plat --dataset epyc ',
+ ' --dataset plat --dataset k80 ',
+ ' --dataset plat --dataset t4 ',
+ ' --dataset e5 --dataset epyc ',
+ ' --dataset e5 --dataset k80 ',
+ ' --dataset e5 --dataset t4 ',
+ ' --dataset epyc --dataset k80 ',
+ ' --dataset epyc --dataset t4 ',
+ ' --dataset k80 --dataset t4 ',
+ ' --dataset arm --dataset plat --dataset e5 ',
+ ' --dataset arm --dataset plat --dataset epyc ',
+ ' --dataset arm --dataset plat --dataset k80 ',
+ ' --dataset arm --dataset plat --dataset t4 ',
+ ' --dataset arm --dataset e5 --dataset epyc ',
+ ' --dataset arm --dataset e5 --dataset k80 ',
+ ' --dataset arm --dataset e5 --dataset t4 ',
+ ' --dataset arm --dataset epyc --dataset k80 ',
+ ' --dataset arm --dataset epyc --dataset t4 ',
+ ' --dataset arm --dataset k80 --dataset t4 ',
+ ' --dataset plat --dataset e5 --dataset epyc ',
+ ' --dataset plat --dataset e5 --dataset k80 ',
+ ' --dataset plat --dataset e5 --dataset t4 ',
+ ' --dataset plat --dataset epyc --dataset k80 ',
+ ' --dataset plat --dataset epyc --dataset t4 ',
+ ' --dataset plat --dataset k80 --dataset t4 ',
+ ' --dataset e5 --dataset epyc --dataset k80 ',
+ ' --dataset e5 --dataset epyc --dataset t4 ',
+ ' --dataset e5 --dataset k80 --dataset t4 ',
+ ' --dataset epyc --dataset k80 --dataset t4 ',
+ ' --dataset arm --dataset plat --dataset e5 --dataset epyc ',
+ ' --dataset arm --dataset plat --dataset e5 --dataset k80 ',
+ ' --dataset arm --dataset plat --dataset e5 --dataset t4 ',
+ ' --dataset arm --dataset plat --dataset epyc --dataset k80 ',
+ ' --dataset arm --dataset plat --dataset epyc --dataset t4 ',
+ ' --dataset arm --dataset plat --dataset k80 --dataset t4 ',
+ ' --dataset arm --dataset e5 --dataset epyc --dataset k80 ',
+ ' --dataset arm --dataset e5 --dataset epyc --dataset t4 ',
+ ' --dataset arm --dataset e5 --dataset k80 --dataset t4 ',
+ ' --dataset arm --dataset epyc --dataset k80 --dataset t4 ',
+ ' --dataset plat --dataset e5 --dataset epyc --dataset k80 ',
+ ' --dataset plat --dataset e5 --dataset epyc --dataset t4 ',
+ ' --dataset plat --dataset e5 --dataset k80 --dataset t4 ',
+ ' --dataset plat --dataset epyc --dataset k80 --dataset t4 ',
+ ' --dataset e5 --dataset epyc --dataset k80 --dataset t4 ',
+ ' --dataset arm --dataset plat --dataset e5 --dataset epyc --dataset k80 ',
+ ' --dataset arm --dataset plat --dataset e5 --dataset epyc --dataset t4 ',
+ ' --dataset arm --dataset plat --dataset e5 --dataset k80 --dataset t4 ',
+ ' --dataset arm --dataset plat --dataset epyc --dataset k80 --dataset t4 ',
+ ' --dataset arm --dataset e5 --dataset epyc --dataset k80 --dataset t4 ',
+ ' --dataset plat --dataset e5 --dataset epyc --dataset k80 --dataset t4 ']
 
 MAML = [False,True]
 class Worker(threading.Thread):
@@ -31,10 +91,10 @@ class Worker(threading.Thread):
         name = self.dataset.replace(' --dataset','').replace(' ','_')
         if self.maml:
             text = f"docker run --ipc=host -it --gpus '\"device={idx%count}\"' --cpus 8 --rm  -v /home/jaehun/tenset/2080:/build -v /home/jaehun/tenset:/root/tvm -v /home/jaehun/tenset:/root test:latest python3 /root/scripts/train_model_1.py \
-          {self.dataset} --maml --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/2_MAML_SMALL_{name}_{self.model}_{self.loss}.log"
+          {self.dataset} --maml --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/VERY_SMALL_{name}_{self.model}_{self.loss}.log"
         else:
             text = f"docker run --ipc=host -it --gpus '\"device={idx%count}\"' --cpus 8 --rm  -v /home/jaehun/tenset/2080:/build -v /home/jaehun/tenset:/root/tvm -v /home/jaehun/tenset:/root test:latest python3 /root/scripts/train_model_1.py \
-            {self.dataset} --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/2_SMALL_{name}_{self.model}_{self.loss}.log"
+            {self.dataset} --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/VERY_SMALL_{name}_{self.model}_{self.loss}.log"
         proc = subprocess.Popen(text, shell=True, executable='/bin/bash')
         _ = proc.communicate()
         time.sleep(3)

@@ -248,15 +248,15 @@ if __name__ == "__main__":
         _data+='_'+i
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'META_{args.models}_{args.loss}_TRAIN_{_data}',project=f"SMALL_TRAIN2", tags=[f"META",f'{args.models}'])
+            wandb.init(name=f'META_{args.models}_{args.loss}_TRAIN_{_data}',project=f"VERY_SMALL_TRAIN", tags=[f"META",f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}_TRAIN_{_data}',project=f"SMALL_TRAIN2", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}_TRAIN_{_data}',project=f"VERY_SMALL_TRAIN", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}_TRAIN_{_data}',project=f"SMALL_TRAIN2", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}_TRAIN_{_data}',project=f"VERY_SMALL_TRAIN", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
-    args.save = f'2_SMALL_{args.models}_{args.loss}{_data}'
+    args.save = f'VERY_SMALL_{args.models}_{args.loss}{_data}'
     if args.maml:
         args.save += f'_maml'
     # Setup random seed and logging
@@ -274,9 +274,9 @@ if __name__ == "__main__":
     
     print("Load dataset...")
 
-    dataset = pickle.load(open(f'/root/scripts/small-{args.dataset[0]}.pkl', "rb"))
+    dataset = pickle.load(open(f'/root/scripts/very-small-{args.dataset[0]}.pkl', "rb"))
     for i in range(1, len(args.dataset)):
-        tmp_dataset = pickle.load(open(f'/root/scripts/small-{args.dataset[i]}.pkl', "rb"))
+        tmp_dataset = pickle.load(open(f'/root/scripts/very-small-{args.dataset[i]}.pkl', "rb"))
         dataset.update_from_dataset(tmp_dataset)
     model = train_zero_shot(dataset, args.train_ratio, args.models, args.split_scheme, args.use_gpu,args,wandb)
     

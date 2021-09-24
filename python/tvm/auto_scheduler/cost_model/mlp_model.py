@@ -668,8 +668,8 @@ class MLPModelInternal:
             self.target_id_dict[target] = len(self.target_id_dict)
     def _metatune_a_model(self, train_set, valid_set, valid_train_set=None):
         net = make_net(self.net_params).to(self.device)
-        self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set,epoch=70)
-        self._fit_METATUNE(net,train_set,valid_set,valid_train_set,epoch=70)
+        self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set,epoch=60)
+        self._fit_METATUNE(net,train_set,valid_set,valid_train_set,epoch=20)
         return net
 
 
