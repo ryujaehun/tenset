@@ -12,7 +12,7 @@ os.makedirs(f"log/{today}", exist_ok=True)
 import time
 
 loss = ['rmse']
-model = ['mlp']
+model = ['oneshot']
 device = [' --dataset e5 ',
 ' --dataset e5 --dataset plat ',
 ' --dataset epyc ',
