@@ -2,31 +2,28 @@
 import subprocess
 import os
 from datetime import datetime
-import torch
+#import torch
 import threading
 today = datetime.today().strftime('%Y-%m-%d')
-count = torch.cuda.device_count()
+count = 9#torch.cuda.device_count()
 sem = threading.Semaphore(count)
 idx = 0
 os.makedirs(f"log/{today}", exist_ok=True)
 import time
 
 loss = ['rmse']
-model = ['oneshot']
-device = [' --dataset e5 ',
+model = ['mlp']
+device = [
+' --dataset e5 ',
 ' --dataset e5 --dataset plat ',
 ' --dataset epyc ',
 ' --dataset epyc --dataset arm ',
 ' --dataset arm ',
-' --dataset e5 --dataset k50 ',
-' --dataset plat ',
+' --dataset e5 --dataset k80 ',
 ' --dataset e5 --dataset epyc --dataset plat ',
-' --dataset t4 ',
-' --dataset arm --dataset k80 ',
-' --dataset k80 ',
-' --dataset k80',' --dataset t4 ' ]
+' --dataset arm --dataset k80 ']
 
-MAML = [True,False]
+MAML = [True]
 class Worker(threading.Thread):
     def __init__(self, loss, model,maml,device):
         super().__init__()
@@ -42,16 +39,15 @@ class Worker(threading.Thread):
         idx += 1
         name = self.device.replace(' --dataset','').replace(' ','_')
         if self.maml:
-            text = f"docker run --ipc=host -it --gpus '\"device={idx%count}\"' --cpus 8 --rm  -v /home/jaehun/tenset/2080:/build -v /home/jaehun/tenset:/root/tvm -v /home/jaehun/tenset:/root test:latest python3 /root/scripts/train_model_0.py \
-         {self.device} --maml --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/1_MAML_PRETRAIN_{self.model}_{self.loss}_{name}.log"
+            text = f"docker run --ipc=host -it --gpus '\"device={idx%count}\"' --cpus 8 --rm  -v /home/ubuntu/tenset:/root/tvm -v /home/ubuntu/tenset:/root test:latest python3 /root/scripts/train_model_0.py \
+         {self.device} --maml --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/2_MAML_PRETRAIN_{self.model}_{self.loss}_{name}.log"
         else:
-            text = f"docker run --ipc=host -it --gpus '\"device={idx%count}\"' --cpus 8 --rm  -v /home/jaehun/tenset/2080:/build -v /home/jaehun/tenset:/root/tvm -v /home/jaehun/tenset:/root test:latest python3 /root/scripts/train_model_0.py \
-            {self.device} --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/1_PRETRAIN_{self.model}_{self.loss}_{name}.log"
+            text = f"docker run --ipc=host -it --gpus '\"device={idx%count}\"' --cpus 8 --rm  -v /home/ubuntu/tenset:/root/tvm -v /home/ubuntu/tenset:/root test:latest python3 /root/scripts/train_model_0.py \
+            {self.device} --wandb   --use-gpu --loss {self.loss} --models {self.model}  >& log/{today}/2_PRETRAIN_{self.model}_{self.loss}_{name}.log"
         proc = subprocess.Popen(text, shell=True, executable='/bin/bash')
         _ = proc.communicate()
         time.sleep(3)
         sem.release()
-
 # 1. many-shot learning 이 필요한 이유
 #  - 기존 large-pre-trained model로는 inference time 에 unseen data에 대해서는 적절한 adaptation이 힘듬
 #  - 반박 : 데이터를 샘플하여 만들면 시간만 많을 경우 찾을 수 있음. 

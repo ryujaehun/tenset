@@ -106,19 +106,7 @@ def make_model(name, use_gpu=False,args=None,wandb=None):
 def train_zero_shot(dataset, train_ratio, model_names, split_scheme, use_gpu,args,wandb):
     # Split dataset
     
-    if split_scheme == "within_task":
-        train_set, test_set = dataset.random_split_within_task(train_ratio)
-    elif split_scheme == "by_task":
-        train_set, test_set = dataset.random_split_by_task(train_ratio)
-    elif split_scheme == "by_target":
-        train_set, test_set = dataset.random_split_by_target(train_ratio)
-    else:
-        raise ValueError("Invalid split scheme: " + split_scheme)
-
-    print("Train set: %d. Task 0 = %s" % (len(train_set), train_set.tasks()[0]))
-    if len(test_set) == 0:
-        test_set = train_set
-    print("Test set:  %d. Task 0 = %s" % (len(test_set), test_set.tasks()[0]))
+    
 
     # Make models
     names = model_names.split("@")
@@ -128,27 +116,13 @@ def train_zero_shot(dataset, train_ratio, model_names, split_scheme, use_gpu,arg
     eval_results = []
     for name, model in zip(names, models):
         # Train the model
-        
-        filename = f'{args.save}_maml' + ".pkl"
-        print(f'load {args.save}')
-        model.load(f'{args.save}' + ".pkl")
-        model.fit_base(train_set, valid_set=test_set)
+        filename = f'{args.save}' + ".pkl"
+        # model.fit_base(train_set, valid_set=test_set)
         print("Save model to %s" % filename)
-        if args.maml:
-            args.save += f'_maml'
-        model.save(filename)
+        model.load(filename)
 
         # Evaluate the model
-        eval_res = evaluate_model(model, test_set)
-        print(name, to_str_round(eval_res))
-        eval_results.append(eval_res)
-
-    # Print evaluation results
-    for i in range(len(models)):
-        print("-" * 60)
-        print("Model: %s" % names[i])
-        for key, val in eval_results[i].items():
-            print("%s: %.4f" % (key, val))
+       
     return models[0]
 
 
@@ -262,7 +236,8 @@ if __name__ == "__main__":
     else:
         wandb = None
     args.save = f'FINAL_PRETRAIN_{args.models}_{args.loss}{_data}'
-    
+    if args.maml:
+        args.save += f'_maml'
     # Setup random seed and logging
     np.random.seed(args.seed)
     random.seed(args.seed)
@@ -278,11 +253,11 @@ if __name__ == "__main__":
     
     print("Load dataset...")
 
-    dataset = pickle.load(open(f'/root/scripts/full-dataset-{args.dataset[0]}.pkl', "rb"))
-    for i in range(1, len(args.dataset)):
-        tmp_dataset = pickle.load(open(f'/root/scripts/full-dataset-{args.dataset[i]}.pkl', "rb"))
-        dataset.update_from_dataset(tmp_dataset)
-    model = train_zero_shot(dataset, args.train_ratio, args.models, args.split_scheme, args.use_gpu,args,wandb)
+    # dataset = pickle.load(open(f'/root/scripts/full-dataset-{args.dataset[0]}.pkl', "rb"))
+    # for i in range(1, len(args.dataset)):
+    #     tmp_dataset = pickle.load(open(f'/root/scripts/full-dataset-{args.dataset[i]}.pkl', "rb"))
+    #     dataset.update_from_dataset(tmp_dataset)
+    model = train_zero_shot(None, args.train_ratio, args.models, args.split_scheme, args.use_gpu,args,wandb)
     
     network_keys = [
         ("resnet_50", [(1, 3, 224,224)]),
@@ -295,13 +270,12 @@ if __name__ == "__main__":
     for _epoch in [0,1,4,8,16,32]:
         args.epoch = _epoch
         for _target in ['arm','plat','e5','epyc','k80','t4']:
+            print(f'target {_target}')
             if _target in ['t4','k80']:
-                print(_target)
                 target = f'cuda -model={TARGET_TABLE[_target]}'
                 nameset('gpu')
                 load_and_register_tasks()
             elif _target in ['e5','epyc','plat','arm']:
-                print(_target)
                 target = f'llvm -model={TARGET_TABLE[_target]}'
                 nameset('cpu')
                 load_and_register_tasks()
@@ -314,6 +288,7 @@ if __name__ == "__main__":
             mape_total = []
             
             for network_key in network_keys:
+                print(f'network_key {network_key}')
                 (latencies, best_latency) , eval_res = eval_cost_model_on_network(model, network_key, target, top_ks,args)
 
                 for top_k, latency in zip(top_ks, latencies):

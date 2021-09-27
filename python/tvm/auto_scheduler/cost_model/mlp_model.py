@@ -475,9 +475,10 @@ class MLPModelInternal:
             # if self.args.mode == 0:
             #     self.base_model = self._fit_a_MAML_model(train_set, valid_set, valid_train_set)
             # else:
-            self.base_model = self._metatune_a_model(train_set, valid_set, valid_train_set)
-        else:
-            self.base_model = self._fit_a_model(train_set, valid_set, valid_train_set)
+            # self.base_model = self._metatune_a_model(train_set, valid_set, valid_train_set)
+        # else:
+        self.base_model = self._metatune_a_model(train_set, valid_set, valid_train_set)
+            # self.base_model = self._fit_a_model(train_set, valid_set, valid_train_set)
 
     def fit_local(self, train_set, valid_set=None):
         if self.few_shot_learning == "base_only":
@@ -668,8 +669,9 @@ class MLPModelInternal:
             self.target_id_dict[target] = len(self.target_id_dict)
     def _metatune_a_model(self, train_set, valid_set, valid_train_set=None):
         net = make_net(self.net_params).to(self.device)
-        self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set,epoch=60)
-        self._fit_METATUNE(net,train_set,valid_set,valid_train_set,epoch=20)
+        if len(self.args.dataset)==1:
+            self._fine_tune_for_metatune(net,train_set,valid_set,valid_train_set,epoch=60)
+        self._fit_METATUNE(net,train_set,valid_set,valid_train_set,epoch=2)
         return net
 
 
@@ -763,6 +765,11 @@ class MLPModelInternal:
             if train_loss < best_train_loss:
                 best_train_loss = train_loss
                 best_epoch = epoch
+            if self.args!=None:
+                self.save(f"{self.args.save}.pkl")
+            else:
+                self.save('tmp_mlp.pkl')
+
     def _start(self,model,base_param):
 
         with torch.no_grad():
@@ -831,7 +838,7 @@ class MLPModelInternal:
 
 
         avg_loss = None
-        total_epoch = int(total_dataset_length*epoch/(32*batch_size_tasks))
+        total_epoch = min(int(total_dataset_length*epoch/(32*batch_size_tasks)),10000)
         print(f"Task Batch {total_epoch}")
         # epoch 100 * 32 개가 전체 데이터셋 크기 
         # 너무 길어서 5으로 나눔 .. 
@@ -892,6 +899,10 @@ class MLPModelInternal:
                     "Valid RMSE":  np.sqrt(valid_loss)})
                  
           
+            if self.args!=None:
+                self.save(f"{self.args.save}.pkl")
+            else:
+                self.save('tmp_mlp.pkl')
 
         return net
 
@@ -976,6 +987,9 @@ class MLPModelInternal:
                 idx = np.arange(len(features))[:length]
                 idx2 = np.arange(len(features))[length:]
                 tmp_set = Dataset.create_one_task(task, features[idx2], np.zeros((len(features[idx2]),)))
+   
+              
+                self.register_new_task( task)
                 self._fine_tune_a_model(model,tmp_set, None,verbose=0)
                 ret[task] = self._predict_a_task(base_model, task, features[idx])
             else:
