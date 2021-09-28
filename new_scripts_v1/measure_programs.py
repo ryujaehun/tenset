@@ -82,9 +82,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", type=str, required=True)
     parser.add_argument("--target-host", type=str)
-    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--start-idx", type=int, default=0)
-    parser.add_argument("--end-idx", type=int, default=323)
+    parser.add_argument("--end-idx", type=int, default=2308)
     parser.add_argument("--step-idx", type=int, default=4)
     args = parser.parse_args()
 

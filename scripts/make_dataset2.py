@@ -127,7 +127,7 @@ def preset_batch_size_1():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--logs", nargs="+", type=str)
-    parser.add_argument("--target", nargs="+", type=str, default=['llvm   -model=e5-2673'])#platinum-8272'])# -mtriple=aarch64-linux-gnu -mattr=+neon,+v8.2a,+dotprod -model=graviton2'])#["llvm -model=epyc-7452"])
+    parser.add_argument("--target", nargs="+", type=str, default=['cuda -model=k80'])# -mtriple=aarch64-linux-gnu -mattr=+neon,+v8.2a,+dotprod -model=graviton2'])#["llvm -model=epyc-7452"])
     parser.add_argument("--sample-in-files", type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out-file", type=str, default='dataset.pkl')
@@ -136,7 +136,7 @@ if __name__ == "__main__":
     parser.add_argument("--preset", type=str, choices=['batch-size-1'])
     parser.add_argument("--n-task", type=int)
     parser.add_argument("--n-measurement", type=int)
-    nameset('cpu')
+    nameset('gpu')
     args = parser.parse_args()
 
     random.seed(args.seed)

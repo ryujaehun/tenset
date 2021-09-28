@@ -10,7 +10,7 @@ import tvm
 from tvm.auto_scheduler.utils import to_str_round
 from tvm.auto_scheduler.cost_model import RandomModelInternal
 
-from common2 import load_and_register_tasks, str2bool
+from common import load_and_register_tasks, str2bool
 
 from tvm.auto_scheduler.dataset import Dataset, LearningTask
 from tvm.auto_scheduler.cost_model.xgb_model import XGBModelInternal
@@ -229,8 +229,8 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--meta_outer_lr", type=float, default=5e-5)
     parser.add_argument("--meta_inner_lr", type=float, default=5e-5)
-    parser.add_argument("--dataset", nargs="+", type=str, default=['/root/scripts/dataset-e5.pkl','/root/scripts/dataset-plat.pkl'])
-    parser.add_argument("--models", type=str, default="mlp")
+    parser.add_argument("--dataset", nargs="+", type=str, default=['/root/scripts/full-dataset-k80.pkl','/root/scripts/full-dataset-t4.pkl'])
+    parser.add_argument("--models", type=str, default="xgb")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--mode", type=int, default=0)
     parser.add_argument("--wandb", default=False, action="store_true")
@@ -238,21 +238,21 @@ if __name__ == "__main__":
         "--split-scheme",
         type=str,
         choices=["by_task", "within_task", "by_target"],
-        default="by_task",
+        default="within_task",
     )
     parser.add_argument("--train-ratio", type=float, default=0.9)
     parser.add_argument("--use-gpu", type=str2bool, nargs='?',
-                        const=True, default=False,
+                        const=True, default=True,
                         help="Whether to use GPU for xgb.")
     args = parser.parse_args()
     print("Arguments: %s" % str(args))
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'{args.models}_{args.loss}_{args.mode}',project=f"result_CROSS_CPU", tags=[f"META",f'{args.mode}',f'{args.models}'])
+            wandb.init(name=f'{args.models}_{args.loss}_{args.mode}',project=f"result_CROSS_GPU", tags=[f"META",f'{args.mode}',f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}',project=f"result_CROSS_CPU", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}',project=f"result_CROSS_GPU", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}',project=f"result_CROSS_CPU", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}',project=f"result_CROSS_GPU", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
@@ -277,41 +277,41 @@ if __name__ == "__main__":
 
     model = train_zero_shot(dataset, args.train_ratio, args.models, args.split_scheme, args.use_gpu,args,wandb)
     
-    network_keys = [
-        ("resnet_50", [(1, 3, 224,224)]),
-        ("mobilenet_v2", [(1, 3, 224,224)]),
-        ("resnext_50", [(1, 3, 224,224)]),
-        ("bert_base", [(1, 128)]),
-        ("bert_tiny", [(1, 128)]),
-    ]
-    mm=args.dataset[0].split('-')[-1].split('.')[0]
-    target = 'llvm -model=epyc-7452'
-    top_ks = [1, 5]
-    top_1_total = []
-    top_5_total = []
-    args.eval = True
-    for network_key in network_keys:
-        latencies, best_latency = eval_cost_model_on_network(model, network_key, target, top_ks,args)
-        for top_k, latency in zip(top_ks, latencies):
-            print(f"Network: {network_key}\tTop-{top_k} score: {best_latency / latency}")
+    # network_keys = [
+    #     ("resnet_50", [(1, 3, 224,224)]),
+    #     ("mobilenet_v2", [(1, 3, 224,224)]),
+    #     ("resnext_50", [(1, 3, 224,224)]),
+    #     ("bert_base", [(1, 128)]),
+    #     ("bert_tiny", [(1, 128)]),
+    # ]
+    # mm=args.dataset[0].split('-')[-1].split('.')[0]
+    # target = 'cuda -model=t4'
+    # top_ks = [1, 5]
+    # top_1_total = []
+    # top_5_total = []
+    # args.eval = True
+    # for network_key in network_keys:
+    #     latencies, best_latency = eval_cost_model_on_network(model, network_key, target, top_ks,args)
+    #     for top_k, latency in zip(top_ks, latencies):
+    #         print(f"Network: {network_key}\tTop-{top_k} score: {best_latency / latency}")
             
         
-        top_1_total.append(best_latency/latencies[0])
-        print(f"top 1 score: {best_latency/latencies[0]}")
-        top_5_total.append(best_latency / latencies[1])
-        print(f"top 5 score: {best_latency / latencies[1]}")
-        if args.wandb:
-            wandb.log({
-                        f"Eval {network_key} Top-1 score": (best_latency / latencies[0]),
-                        f"Eval {network_key} Top-5 score": (best_latency / latencies[1]),
-                        }, )
-    if args.wandb:
-        wandb.log({
-                    f"final Top-1 score": sum(top_1_total) / len(top_1_total),
-                    f"final Top-5 score": sum(top_5_total) / len(top_5_total),
-                    }, )
-    print(f"average top 1 score is {sum(top_1_total) / len(top_1_total)}")
-    print(f"average top 5 score is {sum(top_5_total) / len(top_5_total)}")
+    #     top_1_total.append(best_latency/latencies[0])
+    #     print(f"top 1 score: {best_latency/latencies[0]}")
+    #     top_5_total.append(best_latency / latencies[1])
+    #     print(f"top 5 score: {best_latency / latencies[1]}")
+    #     if args.wandb:
+    #         wandb.log({
+    #                     f"Eval {network_key} Top-1 score": (best_latency / latencies[0]),
+    #                     f"Eval {network_key} Top-5 score": (best_latency / latencies[1]),
+    #                     }, )
+    # if args.wandb:
+    #     wandb.log({
+    #                 f"final Top-1 score": sum(top_1_total) / len(top_1_total),
+    #                 f"final Top-5 score": sum(top_5_total) / len(top_5_total),
+    #                 }, )
+    # print(f"average top 1 score is {sum(top_1_total) / len(top_1_total)}")
+    # print(f"average top 5 score is {sum(top_5_total) / len(top_5_total)}")
 
  
 

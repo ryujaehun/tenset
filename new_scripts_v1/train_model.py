@@ -28,7 +28,7 @@ from tvm.auto_scheduler.cost_model.metric import (
 )
 from tvm import auto_scheduler
 from tvm.auto_scheduler.dataset import LearningTask
-from common import get_task_info_filename, get_measure_record_filename
+from common2 import get_task_info_filename, get_measure_record_filename,nameset
 import os 
 def evaluate_model(model, test_set,ratio=1):
     # make prediction
@@ -176,6 +176,7 @@ def eval_cost_model_on_network(model, network_key, target, top_ks,args):
     if not os.path.exists(dataset_file):
         # get file names of these tasks
         filenames = []
+        
         for task in tasks:
             filename = get_measure_record_filename(task, target)
             filenames.append(filename)
@@ -229,7 +230,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--meta_outer_lr", type=float, default=5e-5)
     parser.add_argument("--meta_inner_lr", type=float, default=5e-5)
-    parser.add_argument("--dataset", nargs="+", type=str, default=['/root/scripts/dataset-e5.pkl','/root/scripts/dataset-plat.pkl'])
+    parser.add_argument("--dataset", nargs="+", type=str, default=['/root/scripts/dataset-e5.pkl','/root/scripts/dataset-k80.pkl'])
     parser.add_argument("--models", type=str, default="mlp")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--mode", type=int, default=0)
@@ -240,7 +241,7 @@ if __name__ == "__main__":
         choices=["by_task", "within_task", "by_target"],
         default="by_task",
     )
-    parser.add_argument("--train-ratio", type=float, default=0.9)
+    parser.add_argument("--train-ratio", type=float, default=0.8)
     parser.add_argument("--use-gpu", type=str2bool, nargs='?',
                         const=True, default=False,
                         help="Whether to use GPU for xgb.")
@@ -248,11 +249,11 @@ if __name__ == "__main__":
     print("Arguments: %s" % str(args))
     if args.wandb:
         if args.maml:
-            wandb.init(name=f'{args.models}_{args.loss}_{args.mode}',project=f"result_CROSS_CPU", tags=[f"META",f'{args.mode}',f'{args.models}'])
+            wandb.init(name=f'{args.models}_{args.loss}_{args.mode}',project=f"result2", tags=[f"META",f'{args.mode}',f'{args.models}'])
         elif args.models in ['xgb','lgbm','random']:
-            wandb.init(name=f'{args.models}',project=f"result_CROSS_CPU", tags=[f"BASELINE",f'{args.models}'])
+            wandb.init(name=f'{args.models}',project=f"result", tags=[f"BASELINE",f'{args.models}'])
         else:
-            wandb.init(name=f'{args.models}_{args.loss}',project=f"result_CROSS_CPU", tags=[f"{args.models}",f"{args.loss}"])
+            wandb.init(name=f'{args.models}_{args.loss}',project=f"result2", tags=[f"{args.models}",f"{args.loss}"])
         wandb.config.update(args)
     else:
         wandb = None
@@ -267,12 +268,17 @@ if __name__ == "__main__":
     logging.getLogger("auto_scheduler").setLevel(logging.DEBUG)
 
     print("Load all tasks...")
+    t = ['cpu','gpu']
+    nameset(t[0])
     load_and_register_tasks()
-
+    nameset(t[1])
+    load_and_register_tasks()
+    
     print("Load dataset...")
     dataset = pickle.load(open(args.dataset[0], "rb"))
     for i in range(1, len(args.dataset)):
         tmp_dataset = pickle.load(open(args.dataset[i], "rb"))
+        nameset(t[i-1])
         dataset.update_from_dataset(tmp_dataset)
 
     model = train_zero_shot(dataset, args.train_ratio, args.models, args.split_scheme, args.use_gpu,args,wandb)
@@ -285,33 +291,8 @@ if __name__ == "__main__":
         ("bert_tiny", [(1, 128)]),
     ]
     mm=args.dataset[0].split('-')[-1].split('.')[0]
-    target = 'llvm -model=epyc-7452'
-    top_ks = [1, 5]
-    top_1_total = []
-    top_5_total = []
-    args.eval = True
-    for network_key in network_keys:
-        latencies, best_latency = eval_cost_model_on_network(model, network_key, target, top_ks,args)
-        for top_k, latency in zip(top_ks, latencies):
-            print(f"Network: {network_key}\tTop-{top_k} score: {best_latency / latency}")
-            
-        
-        top_1_total.append(best_latency/latencies[0])
-        print(f"top 1 score: {best_latency/latencies[0]}")
-        top_5_total.append(best_latency / latencies[1])
-        print(f"top 5 score: {best_latency / latencies[1]}")
-        if args.wandb:
-            wandb.log({
-                        f"Eval {network_key} Top-1 score": (best_latency / latencies[0]),
-                        f"Eval {network_key} Top-5 score": (best_latency / latencies[1]),
-                        }, )
-    if args.wandb:
-        wandb.log({
-                    f"final Top-1 score": sum(top_1_total) / len(top_1_total),
-                    f"final Top-5 score": sum(top_5_total) / len(top_5_total),
-                    }, )
-    print(f"average top 1 score is {sum(top_1_total) / len(top_1_total)}")
-    print(f"average top 5 score is {sum(top_5_total) / len(top_5_total)}")
+    target = 'llvm  -mtriple=aarch64-linux-gnu -mattr=+neon,+v8.2a,+dotprod -model=graviton2'
+ 
 
  
 

@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
+scripts/core*
+new_script_v1/core*
+new_script_v2/core*
 *.S
 # C extensions
 *.so
